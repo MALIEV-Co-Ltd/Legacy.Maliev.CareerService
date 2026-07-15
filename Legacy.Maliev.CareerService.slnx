@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Legacy.Maliev.CareerService.Api/Legacy.Maliev.CareerService.Api.csproj" />
+  <Project Path="Legacy.Maliev.CareerService.Application/Legacy.Maliev.CareerService.Application.csproj" />
+  <Project Path="Legacy.Maliev.CareerService.Data/Legacy.Maliev.CareerService.Data.csproj" />
+  <Project Path="Legacy.Maliev.CareerService.Domain/Legacy.Maliev.CareerService.Domain.csproj" />
+  <Project Path="Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj" />
+</Solution>
