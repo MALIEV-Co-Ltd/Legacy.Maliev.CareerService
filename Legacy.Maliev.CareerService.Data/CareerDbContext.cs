@@ -23,7 +23,7 @@ public sealed class CareerDbContext(DbContextOptions<CareerDbContext> options) :
         level.Property(entity => entity.Description).IsRequired();
         level.Property(entity => entity.CreatedDate).HasColumnType("timestamp with time zone");
         level.Property(entity => entity.ModifiedDate).HasColumnType("timestamp with time zone");
-        level.Property<uint>("xmin").HasColumnType("xid").IsRowVersion();
+        level.Property<uint>("Version").IsRowVersion();
 
         var offer = modelBuilder.Entity<JobOffer>();
         offer.ToTable("Offer");
@@ -39,7 +39,7 @@ public sealed class CareerDbContext(DbContextOptions<CareerDbContext> options) :
         offer.Property(entity => entity.IsFilled);
         offer.Property(entity => entity.CreatedDate).HasColumnType("timestamp with time zone");
         offer.Property(entity => entity.ModifiedDate).HasColumnType("timestamp with time zone");
-        offer.Property<uint>("xmin").HasColumnType("xid").IsRowVersion();
+        offer.Property<uint>("Version").IsRowVersion();
         offer.HasOne(entity => entity.Level)
             .WithMany(levelEntity => levelEntity.Offers)
             .HasForeignKey(entity => entity.LevelId)
