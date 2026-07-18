@@ -10,14 +10,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
     /// <inheritdoc />
     public async Task<PaginatedJobOfferResponse> GetPaginatedAsync(JobSortType? sort, string? search, int? index, int? size, CancellationToken cancellationToken)
     {
-        var query = ApplySearch(await repository.GetOffersAsync(cancellationToken), search);
-        query = ApplySort(query, sort);
-        var totalItems = query.Count;
-        var pageIndex = Math.Max(index ?? 1, 1);
-        var pageSize = Math.Max(size ?? totalItems, 1);
-        var totalPages = totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize);
-        var items = query.Skip((pageIndex - 1) * pageSize).Take(pageSize).Select(ToResponse).ToArray();
-        return new PaginatedJobOfferResponse(items, pageIndex, totalPages, totalItems, pageIndex > 1, pageIndex < totalPages);
+        return await repository.GetPaginatedOffersAsync(sort, search, index, size, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -128,36 +121,6 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
         await repository.DeleteLevelAsync(level, cancellationToken);
         return true;
     }
-
-    private static IReadOnlyList<JobOffer> ApplySearch(IReadOnlyList<JobOffer> offers, string? search)
-    {
-        if (string.IsNullOrWhiteSpace(search))
-        {
-            return offers;
-        }
-
-        var normalized = search.ToLowerInvariant();
-        var isNumeric = int.TryParse(normalized, out var searchAsInteger);
-        return offers.Where(offer =>
-            (isNumeric && offer.Id == searchAsInteger) ||
-            Contains(offer.Title, normalized) ||
-            Contains(offer.Introduction, normalized) ||
-            Contains(offer.WhatWeOffer, normalized) ||
-            Contains(offer.Location, normalized) ||
-            Contains(offer.Description, normalized)).ToArray();
-    }
-
-    private static IReadOnlyList<JobOffer> ApplySort(IReadOnlyList<JobOffer> offers, JobSortType? sort) =>
-        (sort switch
-        {
-            JobSortType.JobId_Descending => offers.OrderByDescending(offer => offer.Id),
-            JobSortType.JobCreatedDate_Ascending => offers.OrderBy(offer => offer.CreatedDate),
-            JobSortType.JobCreatedDate_Descending => offers.OrderByDescending(offer => offer.CreatedDate),
-            _ => offers.OrderBy(offer => offer.Id),
-        }).ToArray();
-
-    private static bool Contains(string? value, string search) =>
-        value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 
     private static JobOfferResponse ToResponse(JobOffer offer) => new(
         offer.Id,
