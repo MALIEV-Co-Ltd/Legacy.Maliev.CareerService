@@ -51,7 +51,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
     /// <inheritdoc />
     public async Task<bool> UpdateOfferAsync(int id, UpsertJobOfferRequest request, CancellationToken cancellationToken)
     {
-        var offer = await repository.GetOfferByIdAsync(id, cancellationToken);
+        var offer = await repository.GetOfferByIdForUpdateAsync(id, cancellationToken);
         if (offer is null)
         {
             return false;
@@ -73,7 +73,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
     /// <inheritdoc />
     public async Task<bool> DeleteOfferAsync(int id, CancellationToken cancellationToken)
     {
-        var offer = await repository.GetOfferByIdAsync(id, cancellationToken);
+        var offer = await repository.GetOfferByIdForUpdateAsync(id, cancellationToken);
         if (offer is null)
         {
             return false;
@@ -103,7 +103,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
     /// <inheritdoc />
     public async Task<bool> UpdateLevelAsync(int id, UpsertJobLevelRequest request, CancellationToken cancellationToken)
     {
-        var level = await repository.GetLevelByIdAsync(id, cancellationToken);
+        var level = await repository.GetLevelByIdForUpdateAsync(id, cancellationToken);
         if (level is null)
         {
             return false;
@@ -119,7 +119,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
     /// <inheritdoc />
     public async Task<bool> DeleteLevelAsync(int id, CancellationToken cancellationToken)
     {
-        var level = await repository.GetLevelByIdAsync(id, cancellationToken);
+        var level = await repository.GetLevelByIdForUpdateAsync(id, cancellationToken);
         if (level is null)
         {
             return false;
