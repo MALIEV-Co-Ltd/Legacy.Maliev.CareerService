@@ -13,7 +13,13 @@ public sealed class CareerRepository(CareerDbContext dbContext) : ICareerReposit
 
     /// <inheritdoc />
     public Task<JobOffer?> GetOfferByIdAsync(int id, CancellationToken cancellationToken) =>
-        dbContext.Offers.Include(offer => offer.Level).SingleOrDefaultAsync(offer => offer.Id == id, cancellationToken);
+        dbContext.Offers.Include(offer => offer.Level).AsNoTracking()
+            .SingleOrDefaultAsync(offer => offer.Id == id, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<JobOffer?> GetOfferByIdForUpdateAsync(int id, CancellationToken cancellationToken) =>
+        dbContext.Offers.Include(offer => offer.Level)
+            .SingleOrDefaultAsync(offer => offer.Id == id, cancellationToken);
 
     /// <inheritdoc />
     public Task<bool> HasOpenPositionsAsync(CancellationToken cancellationToken) =>
@@ -46,6 +52,11 @@ public sealed class CareerRepository(CareerDbContext dbContext) : ICareerReposit
 
     /// <inheritdoc />
     public Task<JobLevel?> GetLevelByIdAsync(int id, CancellationToken cancellationToken) =>
+        dbContext.Levels.AsNoTracking()
+            .SingleOrDefaultAsync(level => level.Id == id, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<JobLevel?> GetLevelByIdForUpdateAsync(int id, CancellationToken cancellationToken) =>
         dbContext.Levels.SingleOrDefaultAsync(level => level.Id == id, cancellationToken);
 
     /// <inheritdoc />

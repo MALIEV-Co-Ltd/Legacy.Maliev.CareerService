@@ -8,8 +8,12 @@ public interface ICareerRepository
     /// <summary>Returns all job offers without tracking.</summary>
     Task<IReadOnlyList<JobOffer>> GetOffersAsync(CancellationToken cancellationToken);
 
-    /// <summary>Returns one tracked offer.</summary>
+    /// <summary>Returns one offer without tracking for read-only use.</summary>
     Task<JobOffer?> GetOfferByIdAsync(int id, CancellationToken cancellationToken);
+
+    /// <summary>Returns one tracked offer for update or deletion.</summary>
+    Task<JobOffer?> GetOfferByIdForUpdateAsync(int id, CancellationToken cancellationToken) =>
+        GetOfferByIdAsync(id, cancellationToken);
 
     /// <summary>Returns whether at least one offer is open.</summary>
     Task<bool> HasOpenPositionsAsync(CancellationToken cancellationToken);
@@ -26,8 +30,12 @@ public interface ICareerRepository
     /// <summary>Returns all levels.</summary>
     Task<IReadOnlyList<JobLevel>> GetLevelsAsync(CancellationToken cancellationToken);
 
-    /// <summary>Returns one tracked level.</summary>
+    /// <summary>Returns one level without tracking for read-only use.</summary>
     Task<JobLevel?> GetLevelByIdAsync(int id, CancellationToken cancellationToken);
+
+    /// <summary>Returns one tracked level for update or deletion.</summary>
+    Task<JobLevel?> GetLevelByIdForUpdateAsync(int id, CancellationToken cancellationToken) =>
+        GetLevelByIdAsync(id, cancellationToken);
 
     /// <summary>Adds and saves a level.</summary>
     Task AddLevelAsync(JobLevel level, CancellationToken cancellationToken);
