@@ -11,9 +11,10 @@ new `Maliev.CareerService` is developed independently.
 ## Architecture
 
 The service uses clean dependency direction: `Api` calls `Application`, domain rules live in
-`Domain`, and PostgreSQL/Redis adapters live in `Data`. It depends on the public MALIEV Aspire
-and messaging-contract source repositories during CI and image builds, so no private package
-credentials are required.
+`Domain`, and PostgreSQL/Redis adapters live in `Data`. It depends only on the public
+`Legacy.Maliev.ServiceDefaults` and `Legacy.Maliev.CompatibilityContracts` source repositories
+during CI and image builds, so the legacy runtime no longer consumes new-platform shared-library
+source or private package credentials.
 
 ## API endpoints
 
