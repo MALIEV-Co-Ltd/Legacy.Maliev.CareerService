@@ -57,8 +57,41 @@ public sealed class CareerApplicationServiceTests
         private readonly List<JobOffer> offers = seed.ToList();
         private readonly List<JobLevel> levels = [];
 
-        public Task<IReadOnlyList<JobOffer>> GetOffersAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<JobOffer>>(offers.ToArray());
+        public Task<PaginatedJobOfferResponse> GetPaginatedOffersAsync(
+            JobSortType? sort,
+            string? search,
+            int? index,
+            int? size,
+            CancellationToken cancellationToken)
+        {
+            IEnumerable<JobOffer> query = offers;
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var isNumeric = int.TryParse(search, out var searchAsInteger);
+                query = query.Where(offer =>
+                    (isNumeric && offer.Id == searchAsInteger) ||
+                    offer.Title?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                    offer.Introduction?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                    offer.WhatWeOffer?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                    offer.Location?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                    offer.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) == true);
+            }
+
+            query = sort switch
+            {
+                JobSortType.JobId_Descending => query.OrderByDescending(offer => offer.Id),
+                JobSortType.JobCreatedDate_Ascending => query.OrderBy(offer => offer.CreatedDate),
+                JobSortType.JobCreatedDate_Descending => query.OrderByDescending(offer => offer.CreatedDate),
+                _ => query.OrderBy(offer => offer.Id),
+            };
+            var filtered = query.ToArray();
+            var pageIndex = Math.Max(index ?? 1, 1);
+            var pageSize = Math.Max(size ?? filtered.Length, 1);
+            var totalPages = filtered.Length == 0 ? 0 : (int)Math.Ceiling(filtered.Length / (double)pageSize);
+            var page = filtered.Skip((pageIndex - 1) * pageSize).Take(pageSize).Select(ToResponse).ToArray();
+            return Task.FromResult(new PaginatedJobOfferResponse(
+                page, pageIndex, totalPages, filtered.Length, pageIndex > 1, pageIndex < totalPages));
+        }
 
         public Task<JobOffer?> GetOfferByIdAsync(int id, CancellationToken cancellationToken) =>
             Task.FromResult(offers.SingleOrDefault(offer => offer.Id == id));
@@ -101,5 +134,26 @@ public sealed class CareerApplicationServiceTests
             levels.Remove(level);
             return Task.CompletedTask;
         }
+
+        private static JobOfferResponse ToResponse(JobOffer offer) => new(
+            offer.Id,
+            offer.LevelId,
+            offer.Title,
+            offer.Introduction,
+            offer.Description,
+            offer.Prerequisites,
+            offer.WhatWeOffer,
+            offer.Location,
+            offer.IsFilled,
+            offer.CreatedDate,
+            offer.ModifiedDate,
+            offer.Level is null
+                ? null
+                : new JobLevelResponse(
+                    offer.Level.Id,
+                    offer.Level.Name,
+                    offer.Level.Description,
+                    offer.Level.CreatedDate,
+                    offer.Level.ModifiedDate));
     }
 }

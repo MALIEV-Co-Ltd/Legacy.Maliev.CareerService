@@ -1,12 +1,18 @@
 using Legacy.Maliev.CareerService.Domain;
+using Legacy.Maliev.CareerService.Application.Models;
 
 namespace Legacy.Maliev.CareerService.Application.Interfaces;
 
 /// <summary>Persists legacy career records.</summary>
 public interface ICareerRepository
 {
-    /// <summary>Returns all job offers without tracking.</summary>
-    Task<IReadOnlyList<JobOffer>> GetOffersAsync(CancellationToken cancellationToken);
+    /// <summary>Returns one filtered, sorted job-offer page without tracking.</summary>
+    Task<PaginatedJobOfferResponse> GetPaginatedOffersAsync(
+        JobSortType? sort,
+        string? search,
+        int? index,
+        int? size,
+        CancellationToken cancellationToken);
 
     /// <summary>Returns one offer without tracking for read-only use.</summary>
     Task<JobOffer?> GetOfferByIdAsync(int id, CancellationToken cancellationToken);
