@@ -23,7 +23,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
     /// <inheritdoc />
     public async Task<JobOfferResponse> CreateOfferAsync(UpsertJobOfferRequest request, CancellationToken cancellationToken)
     {
-        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var now = UtcWallClockNow();
         var offer = new JobOffer
         {
             LevelId = request.LevelId,
@@ -58,7 +58,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
         offer.WhatWeOffer = request.WhatWeOffer;
         offer.Location = request.Location;
         offer.IsFilled = request.IsFilled;
-        offer.ModifiedDate = timeProvider.GetUtcNow().UtcDateTime;
+        offer.ModifiedDate = UtcWallClockNow();
         await repository.UpdateOfferAsync(offer, cancellationToken);
         return true;
     }
@@ -87,7 +87,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
     /// <inheritdoc />
     public async Task<JobLevelResponse> CreateLevelAsync(UpsertJobLevelRequest request, CancellationToken cancellationToken)
     {
-        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var now = UtcWallClockNow();
         var level = new JobLevel { Name = request.Name, Description = request.Description, CreatedDate = now, ModifiedDate = now };
         await repository.AddLevelAsync(level, cancellationToken);
         return ToResponse(level);
@@ -104,7 +104,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
 
         level.Name = request.Name;
         level.Description = request.Description;
-        level.ModifiedDate = timeProvider.GetUtcNow().UtcDateTime;
+        level.ModifiedDate = UtcWallClockNow();
         await repository.UpdateLevelAsync(level, cancellationToken);
         return true;
     }
@@ -142,4 +142,7 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
         level.Description,
         level.CreatedDate,
         level.ModifiedDate);
+
+    private DateTime UtcWallClockNow() =>
+        DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
 }

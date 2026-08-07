@@ -32,7 +32,7 @@ public sealed class CareerMigrationTests
             LevelId = level.Id,
             Title = $"Engineer {index:D2}",
             Description = "Additive manufacturing engineer",
-            CreatedDate = new DateTime(2026, 1, index, 0, 0, 0, DateTimeKind.Utc),
+            CreatedDate = new DateTime(2026, 1, index, 0, 0, 0, DateTimeKind.Unspecified),
             IsFilled = false,
         }));
         await context.SaveChangesAsync();
