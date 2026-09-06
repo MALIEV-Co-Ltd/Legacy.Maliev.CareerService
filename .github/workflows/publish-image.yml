@@ -25,11 +25,13 @@ jobs:
       contents: read
       id-token: write
     if: vars.LEGACY_DEPLOY_ENABLED == 'true'
-    uses: MALIEV-Co-Ltd/Legacy.Maliev.Workflows/.github/workflows/publish-image.yml@6017816fa67f369d785ed30794f002cfd6299af7
+    uses: MALIEV-Co-Ltd/Legacy.Maliev.Workflows/.github/workflows/publish-image.yml@6e3bb55f5ff3ee2b69dd6b4aee6333777ba0ed36
     with:
       image: ${{ vars.LEGACY_ARTIFACT_REGISTRY }}/legacy-maliev-career-service
       dockerfile: Legacy.Maliev.CareerService.Api/Dockerfile
       context: .
+      legacy-service-defaults-ref: 81830f4f0fdf25b655b09918f51c969a11eaed01
+      compatibility-contracts-ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
       environment: legacy-production
       workload-identity-provider: ${{ vars.LEGACY_WORKLOAD_IDENTITY_PROVIDER }}
       service-account: ${{ vars.LEGACY_CAREER_PUBLISHER_SERVICE_ACCOUNT }}
