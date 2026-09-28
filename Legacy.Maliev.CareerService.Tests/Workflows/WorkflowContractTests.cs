@@ -31,8 +31,8 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsCommentedDependencySha()
     {
         AssertMutationRejected(
-            "ref: 5c5f9479313710fa576f83d3b396442997a2fcf4",
-            "ref: main # 5c5f9479313710fa576f83d3b396442997a2fcf4");
+            "ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3",
+            "ref: main # 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3");
     }
 
     [Fact]
@@ -52,8 +52,8 @@ public sealed class WorkflowContractTests
         Assert.Contains("AddStandardMiddleware(", program, StringComparison.Ordinal);
         Assert.Contains("UseStandardMiddleware()", program, StringComparison.Ordinal);
         Assert.DoesNotContain("UseExceptionHandler(", program, StringComparison.Ordinal);
-        Assert.Contains("ref: 5c5f9479313710fa576f83d3b396442997a2fcf4", Workflow, StringComparison.Ordinal);
-        Assert.Contains("legacy-service-defaults-ref: 5c5f9479313710fa576f83d3b396442997a2fcf4", publisher,
+        Assert.Contains("ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3", Workflow, StringComparison.Ordinal);
+        Assert.Contains("legacy-service-defaults-ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3", publisher,
             StringComparison.Ordinal);
     }
 
@@ -207,7 +207,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults",
-                ["ref"] = "5c5f9479313710fa576f83d3b396442997a2fcf4",
+                ["ref"] = "8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3",
                 ["path"] = ".dependencies/Legacy.Maliev.ServiceDefaults",
                 ["persist-credentials"] = "false",
             });
