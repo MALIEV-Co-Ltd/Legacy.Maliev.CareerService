@@ -31,8 +31,8 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsCommentedDependencySha()
     {
         AssertMutationRejected(
-            "ref: 9c4ac9d44a08bcd0aa2088348790ab863814669c",
-            "ref: main # 9c4ac9d44a08bcd0aa2088348790ab863814669c");
+            "ref: 5c5f9479313710fa576f83d3b396442997a2fcf4",
+            "ref: main # 5c5f9479313710fa576f83d3b396442997a2fcf4");
     }
 
     [Fact]
@@ -41,6 +41,20 @@ public sealed class WorkflowContractTests
         Assert.Contains("Legacy.Maliev.ServiceDefaults", ApiProject, StringComparison.Ordinal);
         Assert.DoesNotContain("Maliev.Aspire\\Maliev.Aspire.ServiceDefaults", ApiProject, StringComparison.Ordinal);
         Assert.DoesNotContain("Include=\"Maliev.Aspire.ServiceDefaults\"", ApiProject, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SourceF064_UsesSharedFailureMiddlewareWithoutLocalExceptionHandler()
+    {
+        var program = File.ReadAllText(FindRepositoryFile("Legacy.Maliev.CareerService.Api", "Program.cs"));
+        var publisher = File.ReadAllText(FindRepositoryFile(".github", "workflows", "publish-image.yml"));
+
+        Assert.Contains("AddStandardMiddleware(", program, StringComparison.Ordinal);
+        Assert.Contains("UseStandardMiddleware()", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseExceptionHandler(", program, StringComparison.Ordinal);
+        Assert.Contains("ref: 5c5f9479313710fa576f83d3b396442997a2fcf4", Workflow, StringComparison.Ordinal);
+        Assert.Contains("legacy-service-defaults-ref: 5c5f9479313710fa576f83d3b396442997a2fcf4", publisher,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -193,7 +207,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults",
-                ["ref"] = "9c4ac9d44a08bcd0aa2088348790ab863814669c",
+                ["ref"] = "5c5f9479313710fa576f83d3b396442997a2fcf4",
                 ["path"] = ".dependencies/Legacy.Maliev.ServiceDefaults",
                 ["persist-credentials"] = "false",
             });
