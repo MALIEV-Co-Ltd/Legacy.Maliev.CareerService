@@ -3,12 +3,17 @@ using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Application.Services;
 using Legacy.Maliev.CareerService.Data;
 using Maliev.Aspire.ServiceDefaults;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddDefaultApiVersioning();
-builder.AddPostgresDbContext<CareerDbContext>(connectionName: "CareerDbContext");
+builder.AddPostgresDbContext<CareerDbContext>(connectionName: "CareerDbContext", configureOptions: (_, options) =>
+    // EF's query-failure message embeds exception text/stacks before the formatter can redact it.
+    // The standard middleware still records the correlated, type-only critical failure event.
+    options.ConfigureWarnings(warnings => warnings.Ignore(
+        CoreEventId.QueryIterationFailed, CoreEventId.SaveChangesFailed, CoreEventId.ExecutionStrategyRetrying)));
 builder.AddStandardCache("legacy:career:");
 builder.AddStandardCors();
 builder.AddJwtAuthentication();
