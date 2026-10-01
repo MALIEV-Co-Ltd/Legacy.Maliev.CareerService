@@ -24,9 +24,12 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
 
     /// <summary>Deletes a job offer.</summary>
     [HttpDelete("{offerId:int}")]
-    [RequirePermission(JobOfferPermissions.JobsDelete)]
-    public async Task<ActionResult> DeleteOfferAsync(int offerId, CancellationToken cancellationToken) =>
-        await careerService.DeleteOfferAsync(offerId, cancellationToken) ? NoContent() : NotFound();
+    [RequirePermission(JobOfferPermissions.JobsDelete, RequireLiveCheck = true, IsCritical = true)]
+    public async Task<ActionResult> DeleteOfferAsync(int offerId, CancellationToken cancellationToken)
+    {
+        try { return await careerService.DeleteOfferAsync(offerId, cancellationToken) ? NoContent() : NotFound(); }
+        catch (CareerConcurrencyException) { return Conflict("The career record changed during this request."); }
+    }
 
     /// <summary>Returns whether at least one open position exists.</summary>
     [HttpGet("job-opening-status")]
@@ -60,6 +63,9 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     /// <summary>Updates a job offer.</summary>
     [HttpPut("{offerId:int}")]
     [RequirePermission(JobOfferPermissions.JobsUpdate)]
-    public async Task<ActionResult> UpdateOfferAsync(int offerId, [FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken) =>
-        await careerService.UpdateOfferAsync(offerId, request, cancellationToken) ? NoContent() : NotFound();
+    public async Task<ActionResult> UpdateOfferAsync(int offerId, [FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken)
+    {
+        try { return await careerService.UpdateOfferAsync(offerId, request, cancellationToken) ? NoContent() : NotFound(); }
+        catch (CareerConcurrencyException) { return Conflict("The career record changed during this request."); }
+    }
 }

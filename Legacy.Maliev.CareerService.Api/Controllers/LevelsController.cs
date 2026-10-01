@@ -24,9 +24,12 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
 
     /// <summary>Deletes a job level.</summary>
     [HttpDelete("{levelId:int}")]
-    [RequirePermission(JobOfferPermissions.LevelsDelete)]
-    public async Task<ActionResult> DeleteLevelAsync(int levelId, CancellationToken cancellationToken) =>
-        await careerService.DeleteLevelAsync(levelId, cancellationToken) ? NoContent() : NotFound();
+    [RequirePermission(JobOfferPermissions.LevelsDelete, RequireLiveCheck = true, IsCritical = true)]
+    public async Task<ActionResult> DeleteLevelAsync(int levelId, CancellationToken cancellationToken)
+    {
+        try { return await careerService.DeleteLevelAsync(levelId, cancellationToken) ? NoContent() : NotFound(); }
+        catch (CareerConcurrencyException) { return Conflict("The career record changed during this request."); }
+    }
 
     /// <summary>Returns one job level.</summary>
     [HttpGet("{levelId:int}", Name = "GetLevel")]
@@ -49,6 +52,9 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     /// <summary>Updates a job level.</summary>
     [HttpPut("{levelId:int}")]
     [RequirePermission(JobOfferPermissions.LevelsUpdate)]
-    public async Task<ActionResult> UpdateLevelAsync(int levelId, [FromBody] UpsertJobLevelRequest request, CancellationToken cancellationToken) =>
-        await careerService.UpdateLevelAsync(levelId, request, cancellationToken) ? NoContent() : NotFound();
+    public async Task<ActionResult> UpdateLevelAsync(int levelId, [FromBody] UpsertJobLevelRequest request, CancellationToken cancellationToken)
+    {
+        try { return await careerService.UpdateLevelAsync(levelId, request, cancellationToken) ? NoContent() : NotFound(); }
+        catch (CareerConcurrencyException) { return Conflict("The career record changed during this request."); }
+    }
 }
