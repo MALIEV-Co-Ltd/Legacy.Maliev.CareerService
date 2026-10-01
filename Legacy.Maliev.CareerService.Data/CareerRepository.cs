@@ -99,14 +99,24 @@ public sealed class CareerRepository(CareerDbContext dbContext) : ICareerReposit
     public async Task UpdateOfferAsync(JobOffer offer, CancellationToken cancellationToken)
     {
         dbContext.Offers.Update(offer);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try { await dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException exception) when (IsCareerConflict(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new CareerConcurrencyException(exception);
+        }
     }
 
     /// <inheritdoc />
     public async Task DeleteOfferAsync(JobOffer offer, CancellationToken cancellationToken)
     {
         dbContext.Offers.Remove(offer);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try { await dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException exception) when (IsCareerConflict(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new CareerConcurrencyException(exception);
+        }
     }
 
     /// <inheritdoc />
@@ -133,15 +143,28 @@ public sealed class CareerRepository(CareerDbContext dbContext) : ICareerReposit
     public async Task UpdateLevelAsync(JobLevel level, CancellationToken cancellationToken)
     {
         dbContext.Levels.Update(level);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try { await dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException exception) when (IsCareerConflict(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new CareerConcurrencyException(exception);
+        }
     }
 
     /// <inheritdoc />
     public async Task DeleteLevelAsync(JobLevel level, CancellationToken cancellationToken)
     {
         dbContext.Levels.Remove(level);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try { await dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException exception) when (IsCareerConflict(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new CareerConcurrencyException(exception);
+        }
     }
+
+    private static bool IsCareerConflict(DbUpdateConcurrencyException exception) =>
+        exception.Entries.Count > 0 && exception.Entries.All(entry => entry.Entity is JobOffer or JobLevel);
 
     private static string EscapeLikePattern(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal)
