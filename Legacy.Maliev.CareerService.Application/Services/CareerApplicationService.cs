@@ -28,11 +28,8 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
         {
             LevelId = request.LevelId,
             Title = request.Title,
-            Introduction = request.Introduction,
             Description = request.Description,
             Prerequisites = request.Prerequisites,
-            WhatWeOffer = request.WhatWeOffer,
-            Location = request.Location,
             IsFilled = request.IsFilled,
             CreatedDate = now,
             ModifiedDate = now,
@@ -52,11 +49,8 @@ public sealed class CareerApplicationService(ICareerRepository repository, TimeP
 
         offer.LevelId = request.LevelId;
         offer.Title = request.Title;
-        offer.Introduction = request.Introduction;
         offer.Description = request.Description;
         offer.Prerequisites = request.Prerequisites;
-        offer.WhatWeOffer = request.WhatWeOffer;
-        offer.Location = request.Location;
         offer.IsFilled = request.IsFilled;
         offer.ModifiedDate = UtcWallClockNow();
         await repository.UpdateOfferAsync(offer, cancellationToken);
