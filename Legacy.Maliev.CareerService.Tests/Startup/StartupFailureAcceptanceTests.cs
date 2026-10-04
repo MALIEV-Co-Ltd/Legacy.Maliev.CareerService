@@ -37,8 +37,10 @@ public sealed class StartupFailureAcceptanceTests
                 "Build the actual API Release artifacts before running subprocess acceptance.");
             var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
             {
-                UseShellExecute = false, RedirectStandardOutput = true,
-                RedirectStandardError = true, CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
                 WorkingDirectory = Path.GetDirectoryName(api)!
             };
             var benign = new[] { "PATH", "SystemRoot", "WINDIR", "TEMP", "TMP", "DOTNET_ROOT", "HOME", "USERPROFILE" }
