@@ -27,7 +27,7 @@ public sealed class PublicationDependencyTests
         Assert.Equal("read", Value(permissions, "actions"));
         Assert.Equal("write", Value(permissions, "id-token"));
         var inputs = (YamlMappingNode)publish.Children[new YamlScalarNode("with")];
-        Assert.Equal("8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3", Value(inputs, "legacy-service-defaults-ref"));
+        Assert.Equal("c40a7f82cea347b949444dcd7fb730f2b8dc3c0e", Value(inputs, "legacy-service-defaults-ref"));
         Assert.Equal("78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7", Value(inputs, "compatibility-contracts-ref"));
         Assert.Equal(".", Value(inputs, "context"));
         Assert.Equal("legacy-production", Value(inputs, "environment"));

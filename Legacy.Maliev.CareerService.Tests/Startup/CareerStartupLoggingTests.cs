@@ -173,7 +173,7 @@ public sealed class CareerStartupLoggingTests
             builder.ConfigureHostConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(_rsa.ExportSubjectPublicKeyInfoPem())),
-                ["ConnectionStrings:CareerDbContext"] = databaseConnection ?? "Host=127.0.0.1;Port=1;Database=acceptance;Username=acceptance;Password=test-only", // gitleaks:allow
+                ["ConnectionStrings:CareerDbContext"] = databaseConnection ?? "Host=127.0.0.1;Port=1;Database=acceptance;Username=acceptance",
                 ["Cache:RedisEnabled"] = "false",
                 ["Observability:TracingEnabled"] = "true",
                 ["Observability:RuntimeMetricsEnabled"] = "false",
