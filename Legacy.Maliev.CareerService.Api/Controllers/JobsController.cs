@@ -14,6 +14,8 @@ namespace Legacy.Maliev.CareerService.Api.Controllers;
 public sealed class JobsController(ICareerService careerService) : ControllerBase
 {
     /// <summary>Creates a job offer.</summary>
+    /// <param name="request">The job offer details and existing level identifier.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpPost]
     [RequirePermission(JobOfferPermissions.JobsCreate)]
     public async Task<ActionResult> CreateOfferAsync([FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken)
@@ -23,6 +25,8 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     }
 
     /// <summary>Deletes a job offer.</summary>
+    /// <param name="offerId" example="42">The identifier of the job offer to delete.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpDelete("{offerId:int}")]
     [RequirePermission(JobOfferPermissions.JobsDelete, RequireLiveCheck = true, IsCritical = true)]
     public async Task<ActionResult> DeleteOfferAsync(int offerId, CancellationToken cancellationToken)
@@ -32,12 +36,15 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     }
 
     /// <summary>Returns whether at least one open position exists.</summary>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpGet("job-opening-status")]
     [AllowAnonymous]
     public Task<bool> GetHasOpenPositionsAsync(CancellationToken cancellationToken) =>
         careerService.HasOpenPositionsAsync(cancellationToken);
 
     /// <summary>Returns one job offer.</summary>
+    /// <param name="offerId" example="42">The identifier of the job offer to retrieve.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpGet("{offerId:int}", Name = "GetOffer")]
     [AllowAnonymous]
     public async Task<ActionResult<JobOfferResponse>> GetOfferAsync(int offerId, CancellationToken cancellationToken)
@@ -47,6 +54,11 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     }
 
     /// <summary>Returns paginated job offers.</summary>
+    /// <param name="sort" example="0">The legacy job-offer sort value.</param>
+    /// <param name="search" example="engineer">Text to search in the job offer fields.</param>
+    /// <param name="index" example="1">The one-based page index; omitted values use the existing default.</param>
+    /// <param name="size" example="10">The page size; omitted values use the existing default.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<PaginatedJobOfferResponse>> GetPaginatedAsync(
@@ -61,6 +73,9 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     }
 
     /// <summary>Updates a job offer.</summary>
+    /// <param name="offerId" example="42">The identifier of the job offer to update.</param>
+    /// <param name="request">The replacement job offer details.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpPut("{offerId:int}")]
     [RequirePermission(JobOfferPermissions.JobsUpdate)]
     public async Task<ActionResult> UpdateOfferAsync(int offerId, [FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken)

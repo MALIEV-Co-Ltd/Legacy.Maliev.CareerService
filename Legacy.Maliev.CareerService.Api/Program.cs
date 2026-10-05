@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Application.Services;
 using Legacy.Maliev.CareerService.Data;
+using Legacy.Maliev.CareerService.Api.Documentation;
 using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.Diagnostics;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -37,6 +38,8 @@ static async Task RunHostAsync(string[] startupArgs)
     builder.AddStandardOpenApi(
         title: "Legacy MALIEV JobOffer Service API",
         description: "Temporary .NET 10 compatibility service preserving the legacy Jobs and jobs/Levels API contracts.");
+    // Bind this assembly's maintained XML documentation to the served document.
+    builder.Services.AddOpenApi("v1", CareerOpenApi.Configure);
 
     builder.Services.AddControllers().AddJsonOptions(options =>
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);

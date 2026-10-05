@@ -14,6 +14,8 @@ namespace Legacy.Maliev.CareerService.Api.Controllers;
 public sealed class LevelsController(ICareerService careerService) : ControllerBase
 {
     /// <summary>Creates a job level.</summary>
+    /// <param name="request">The job level name and description.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpPost]
     [RequirePermission(JobOfferPermissions.LevelsCreate)]
     public async Task<ActionResult> CreateLevelAsync([FromBody] UpsertJobLevelRequest request, CancellationToken cancellationToken)
@@ -23,6 +25,8 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     }
 
     /// <summary>Deletes a job level.</summary>
+    /// <param name="levelId" example="42">The identifier of the job level to delete.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpDelete("{levelId:int}")]
     [RequirePermission(JobOfferPermissions.LevelsDelete, RequireLiveCheck = true, IsCritical = true)]
     public async Task<ActionResult> DeleteLevelAsync(int levelId, CancellationToken cancellationToken)
@@ -32,6 +36,8 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     }
 
     /// <summary>Returns one job level.</summary>
+    /// <param name="levelId" example="42">The identifier of the job level to retrieve.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpGet("{levelId:int}", Name = "GetLevel")]
     [AllowAnonymous]
     public async Task<ActionResult<JobLevelResponse>> GetLevelAsync(int levelId, CancellationToken cancellationToken)
@@ -41,6 +47,7 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     }
 
     /// <summary>Returns all job levels.</summary>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<JobLevelResponse>>> GetLevelsAsync(CancellationToken cancellationToken)
@@ -50,6 +57,9 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     }
 
     /// <summary>Updates a job level.</summary>
+    /// <param name="levelId" example="42">The identifier of the job level to update.</param>
+    /// <param name="request">The replacement job level name and description.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     [HttpPut("{levelId:int}")]
     [RequirePermission(JobOfferPermissions.LevelsUpdate)]
     public async Task<ActionResult> UpdateLevelAsync(int levelId, [FromBody] UpsertJobLevelRequest request, CancellationToken cancellationToken)
