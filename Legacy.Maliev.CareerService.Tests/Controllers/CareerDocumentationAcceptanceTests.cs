@@ -66,4 +66,22 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
             Assert.True(parameter.TryGetProperty("description", out var description) && !string.IsNullOrWhiteSpace(description.GetString()));
         }
     }
+
+    [Fact]
+    public async Task Documentation_DescribesActualCreationAndConcurrencyResults()
+    {
+        await using var host = fixture.Factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        using var client = host.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var body = JsonDocument.Parse(await client.GetStringAsync("/Jobs/openapi/v1.json"));
+        var paths = body.RootElement.GetProperty("paths");
+        foreach (var (collection, item) in new[] { ("/Jobs", "/Jobs/{offerId}"), ("/jobs/Levels", "/jobs/Levels/{levelId}") })
+        {
+            var created = paths.GetProperty(collection).GetProperty("post").GetProperty("responses").GetProperty("201");
+            Assert.True(created.GetProperty("content").TryGetProperty("application/json", out _));
+            Assert.False(string.IsNullOrWhiteSpace(created.GetProperty("description").GetString()));
+            foreach (var method in new[] { "put", "delete" })
+                foreach (var status in new[] { "204", "404", "409" })
+                    Assert.False(string.IsNullOrWhiteSpace(paths.GetProperty(item).GetProperty(method).GetProperty("responses").GetProperty(status).GetProperty("description").GetString()));
+        }
+    }
 }
