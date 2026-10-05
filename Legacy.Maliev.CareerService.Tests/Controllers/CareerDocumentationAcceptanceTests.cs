@@ -106,4 +106,30 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         Assert.True(reference.TryGetProperty("description", out var levelDescription) && !string.IsNullOrWhiteSpace(levelDescription.GetString()),
             $"Missing existing level-reference guidance: {level}");
     }
+
+    [Fact]
+    public async Task Documentation_ExplainsExactPublicOpenPositionBoolean()
+    {
+        await using var host = fixture.Factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        using var client = host.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/Jobs/openapi/v1.json"));
+        var response = document.RootElement.GetProperty("paths").GetProperty("/Jobs/job-opening-status").GetProperty("get")
+            .GetProperty("responses").GetProperty("200");
+        Assert.Equal("True if any job offer has IsFilled set to false; false otherwise.", response.GetProperty("description").GetString());
+        Assert.Equal("boolean", response.GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task Documentation_ExplainsExistingLiveAuthorizationForCriticalDeletions()
+    {
+        await using var host = fixture.Factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        using var client = host.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/Jobs/openapi/v1.json"));
+        foreach (var path in new[] { "/Jobs/{offerId}", "/jobs/Levels/{levelId}" })
+        {
+            var deletion = document.RootElement.GetProperty("paths").GetProperty(path).GetProperty("delete");
+            Assert.True(deletion.TryGetProperty("description", out var description), "The existing live authorization requirement must be documented.");
+            Assert.Equal("Deletion requires a fresh authorization decision for the existing delete permission; cached permission claims do not authorize this critical operation.", description.GetString());
+        }
+    }
 }
