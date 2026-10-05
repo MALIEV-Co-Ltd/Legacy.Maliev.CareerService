@@ -14,7 +14,6 @@ public sealed class CareerSharedLevelCollection;
 public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
     [Theory]
-    [InlineData(null, null)]
     [InlineData("", "")]
     [InlineData("  Literal level  ", "  Literal description  ")]
     [InlineData("วิศวกร", "รายละเอียดระดับ")]
@@ -69,6 +68,34 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         }
         Assert.Equal("true", await reader.GetStringAsync("/jobs/job-opening-status/"));
         Assert.Equal(offersBefore, await OffersAsync());
+    }
+
+    [Theory]
+    [InlineData(null, "Valid description")]
+    [InlineData("Valid name", null)]
+    [InlineData(null, null)]
+    public async Task SharedLevelUpdate_SourceRequiredFieldsFailPrivatelyWithoutChangingEitherOffer(string? name, string? description)
+    {
+        var id = await SeedAsync();
+        var before = await SnapshotAsync();
+        using var writer = fixture.Client("legacy-career.levels.update");
+        using var response = await writer.PutAsJsonAsync($"/jobs/levels/{id}", new { Name = name, Description = description });
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal(500, json.RootElement.GetProperty("statusCode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("details").ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
+        Assert.DoesNotContain("23502", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Npgsql", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Original level", body, StringComparison.Ordinal);
+        Assert.Equal(before, await SnapshotAsync());
+        using var reader = fixture.Client();
+        using var listing = await reader.GetAsync("/jobs/");
+        Assert.Equal(HttpStatusCode.OK, listing.StatusCode);
+        using var listingJson = JsonDocument.Parse(await listing.Content.ReadAsStringAsync());
+        foreach (var item in listingJson.RootElement.GetProperty("items").EnumerateArray())
+            AssertLevelFields(item.GetProperty("level"), "Original level", "Original description");
     }
 
     [Theory]
