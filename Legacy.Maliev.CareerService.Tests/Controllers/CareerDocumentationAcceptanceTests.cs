@@ -34,7 +34,10 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         var count = 0;
         foreach (var path in paths.EnumerateObject())
         {
-            if (!path.Name.StartsWith("/Jobs", StringComparison.OrdinalIgnoreCase)) continue;
+            // Match the controller contracts exactly; the shared health routes
+            // also use the /Jobs service prefix but are not business operations.
+            if (path.Name is not ("/Jobs" or "/Jobs/{offerId}" or "/Jobs/job-opening-status"
+                or "/jobs/Levels" or "/jobs/Levels/{levelId}")) continue;
             foreach (var operation in path.Value.EnumerateObject().Where(item => item.Name is "get" or "post" or "put" or "delete"))
             {
                 count++;
