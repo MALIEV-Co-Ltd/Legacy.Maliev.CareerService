@@ -84,4 +84,21 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
                     Assert.False(string.IsNullOrWhiteSpace(paths.GetProperty(item).GetProperty(method).GetProperty("responses").GetProperty(status).GetProperty("description").GetString()));
         }
     }
+
+    [Fact]
+    public async Task Documentation_ExplainsJobPayloadAndItsExistingLevelReference()
+    {
+        await using var host = fixture.Factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        using var client = host.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/Jobs/openapi/v1.json"));
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        var request = schemas.GetProperty("UpsertJobOfferRequest");
+        Assert.Equal("Legacy-compatible job offer create/update payload.", request.GetProperty("description").GetString());
+        foreach (var name in new[] { "levelId", "title", "introduction", "description", "prerequisites", "whatWeOffer", "location", "isFilled" })
+            Assert.True(request.GetProperty("properties").GetProperty(name).TryGetProperty("description", out var description)
+                && !string.IsNullOrWhiteSpace(description.GetString()), $"Missing job field guidance for {name}: {request}");
+        var level = schemas.GetProperty("JobOfferResponse").GetProperty("properties").GetProperty("level");
+        Assert.True(level.TryGetProperty("description", out var levelDescription) && !string.IsNullOrWhiteSpace(levelDescription.GetString()),
+            $"Missing existing level-reference guidance: {level}");
+    }
 }
