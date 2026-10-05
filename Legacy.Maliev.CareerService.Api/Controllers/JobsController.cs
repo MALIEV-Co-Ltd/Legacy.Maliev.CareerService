@@ -16,8 +16,10 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     /// <summary>Creates a job offer.</summary>
     /// <param name="request">The job offer details and existing level identifier.</param>
     /// <param name="cancellationToken">Request cancellation.</param>
+    /// <response code="201">The created job offer, with its service-assigned identifier.</response>
     [HttpPost]
     [RequirePermission(JobOfferPermissions.JobsCreate)]
+    [ProducesResponseType<JobOfferResponse>(StatusCodes.Status201Created)]
     public async Task<ActionResult> CreateOfferAsync([FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken)
     {
         var created = await careerService.CreateOfferAsync(request, cancellationToken);
@@ -27,8 +29,14 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     /// <summary>Deletes a job offer.</summary>
     /// <param name="offerId" example="42">The identifier of the job offer to delete.</param>
     /// <param name="cancellationToken">Request cancellation.</param>
+    /// <response code="204">The job offer was deleted.</response>
+    /// <response code="404">The job offer does not exist.</response>
+    /// <response code="409">The career record changed during this request.</response>
     [HttpDelete("{offerId:int}")]
     [RequirePermission(JobOfferPermissions.JobsDelete, RequireLiveCheck = true, IsCritical = true)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult> DeleteOfferAsync(int offerId, CancellationToken cancellationToken)
     {
         try { return await careerService.DeleteOfferAsync(offerId, cancellationToken) ? NoContent() : NotFound(); }
@@ -76,8 +84,14 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     /// <param name="offerId" example="42">The identifier of the job offer to update.</param>
     /// <param name="request">The replacement job offer details.</param>
     /// <param name="cancellationToken">Request cancellation.</param>
+    /// <response code="204">The job offer was updated.</response>
+    /// <response code="404">The job offer does not exist.</response>
+    /// <response code="409">The career record changed during this request.</response>
     [HttpPut("{offerId:int}")]
     [RequirePermission(JobOfferPermissions.JobsUpdate)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult> UpdateOfferAsync(int offerId, [FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken)
     {
         try { return await careerService.UpdateOfferAsync(offerId, request, cancellationToken) ? NoContent() : NotFound(); }
