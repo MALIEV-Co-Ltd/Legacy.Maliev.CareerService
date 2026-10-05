@@ -1,0 +1,83 @@
+<?xml version='1.0' encoding='utf-8'?>
+<doc>
+  <members>
+    <member name="T:Legacy.Maliev.CareerService.Application.Models.JobLevelResponse">
+      <summary>Legacy-compatible level response.</summary>
+    </member>
+    <member name="T:Legacy.Maliev.CareerService.Application.Models.JobOfferResponse">
+      <summary>Legacy-compatible offer response.</summary>
+    </member>
+    <member name="T:Legacy.Maliev.CareerService.Application.Models.PaginatedJobOfferResponse">
+      <summary>Legacy-compatible paginated Web API response shape.</summary>
+    </member>
+    <member name="T:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest">
+      <summary>Legacy-compatible job offer create/update payload.</summary>
+    </member>
+    <member name="T:Legacy.Maliev.CareerService.Application.Models.UpsertJobLevelRequest">
+      <summary>Legacy-compatible level create/update payload.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.LevelId">
+      <summary>The identifier of the existing job level.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.Title">
+      <summary>The job offer title.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.Introduction">
+      <summary>The job offer introduction text.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.Description">
+      <summary>The responsibilities and job description text.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.Prerequisites">
+      <summary>The requirements for candidates.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.WhatWeOffer">
+      <summary>The benefits and offer text.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.Location">
+      <summary>The job location text.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobOfferRequest.IsFilled">
+      <summary>Whether the position is filled, when a value is supplied.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.JobOfferResponse.Id">
+      <summary>The stored job offer identifier.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.JobOfferResponse.LevelId">
+      <summary>The identifier of the related job level.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.JobOfferResponse.Level">
+      <summary>The related job-level projection, omitted when unavailable.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.JobOfferResponse.CreatedDate">
+      <summary>The stored creation timestamp, omitted when the legacy row has none.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.JobOfferResponse.ModifiedDate">
+      <summary>The stored modification timestamp, omitted when the legacy row has none.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobLevelRequest.Name">
+      <summary>The job level name.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobLevelRequest.Description">
+      <summary>The job level description text.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.PaginatedJobOfferResponse.Items">
+      <summary>The job offers on the selected page.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.PaginatedJobOfferResponse.PageIndex">
+      <summary>The one-based selected page index.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.PaginatedJobOfferResponse.TotalPages">
+      <summary>The number of pages for the current query.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.PaginatedJobOfferResponse.TotalItems">
+      <summary>The number of matching job offers.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.PaginatedJobOfferResponse.HasPreviousPage">
+      <summary>Whether a page precedes the selected page.</summary>
+    </member>
+    <member name="P:Legacy.Maliev.CareerService.Application.Models.PaginatedJobOfferResponse.HasNextPage">
+      <summary>Whether another page follows the selected page.</summary>
+    </member>
+  </members>
+</doc>
