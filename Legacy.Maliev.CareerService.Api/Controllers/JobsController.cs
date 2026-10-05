@@ -27,6 +27,7 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     }
 
     /// <summary>Deletes a job offer.</summary>
+    /// <remarks>Deletion requires a fresh authorization decision for the existing delete permission; cached permission claims do not authorize this critical operation.</remarks>
     /// <param name="offerId" example="42">The identifier of the job offer to delete.</param>
     /// <param name="cancellationToken">Request cancellation.</param>
     /// <response code="204">The job offer was deleted.</response>
@@ -45,6 +46,7 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
 
     /// <summary>Returns whether at least one open position exists.</summary>
     /// <param name="cancellationToken">Request cancellation.</param>
+    /// <returns>True if any job offer has IsFilled set to false; false otherwise.</returns>
     [HttpGet("job-opening-status")]
     [AllowAnonymous]
     public Task<bool> GetHasOpenPositionsAsync(CancellationToken cancellationToken) =>

@@ -27,6 +27,7 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     }
 
     /// <summary>Deletes a job level.</summary>
+    /// <remarks>Deletion requires a fresh authorization decision for the existing delete permission; cached permission claims do not authorize this critical operation.</remarks>
     /// <param name="levelId" example="42">The identifier of the job level to delete.</param>
     /// <param name="cancellationToken">Request cancellation.</param>
     /// <response code="204">The job level was deleted.</response>
