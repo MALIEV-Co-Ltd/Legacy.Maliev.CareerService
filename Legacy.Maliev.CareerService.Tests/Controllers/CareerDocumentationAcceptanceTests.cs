@@ -132,4 +132,19 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
             Assert.Equal("Deletion requires a fresh authorization decision for the existing delete permission; cached permission claims do not authorize this critical operation.", description.GetString());
         }
     }
+
+    [Fact]
+    public async Task Documentation_DescribesPayloadInsteadOfCancellationForBodyOperations()
+    {
+        await using var host = fixture.Factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        using var client = host.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/Jobs/openapi/v1.json"));
+        foreach (var (path, method) in new[] { ("/Jobs", "post"), ("/Jobs/{offerId}", "put"), ("/jobs/Levels", "post"), ("/jobs/Levels/{levelId}", "put") })
+        {
+            var body = document.RootElement.GetProperty("paths").GetProperty(path).GetProperty(method).GetProperty("requestBody");
+            Assert.True(body.TryGetProperty("description", out var description));
+            Assert.Contains("job", description.GetString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("cancellation", description.GetString(), StringComparison.OrdinalIgnoreCase);
+        }
+    }
 }
