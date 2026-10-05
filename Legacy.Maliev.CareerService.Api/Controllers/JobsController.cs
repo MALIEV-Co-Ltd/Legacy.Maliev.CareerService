@@ -14,8 +14,8 @@ namespace Legacy.Maliev.CareerService.Api.Controllers;
 public sealed class JobsController(ICareerService careerService) : ControllerBase
 {
     /// <summary>Creates a job offer.</summary>
-    /// <param name="request">The job offer details and existing level identifier.</param>
     /// <param name="cancellationToken">Request cancellation.</param>
+    /// <param name="request">The job offer details and existing level identifier.</param>
     /// <response code="201">The created job offer, with its service-assigned identifier.</response>
     [HttpPost]
     [RequirePermission(JobOfferPermissions.JobsCreate)]
@@ -83,9 +83,9 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     }
 
     /// <summary>Updates a job offer.</summary>
+    /// <param name="cancellationToken">Request cancellation.</param>
     /// <param name="offerId" example="42">The identifier of the job offer to update.</param>
     /// <param name="request">The replacement job offer details.</param>
-    /// <param name="cancellationToken">Request cancellation.</param>
     /// <response code="204">The job offer was updated.</response>
     /// <response code="404">The job offer does not exist.</response>
     /// <response code="409">The career record changed during this request.</response>
