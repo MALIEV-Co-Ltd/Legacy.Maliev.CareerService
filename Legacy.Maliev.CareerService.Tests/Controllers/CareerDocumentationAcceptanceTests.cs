@@ -98,7 +98,12 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
             Assert.True(request.GetProperty("properties").GetProperty(name).TryGetProperty("description", out var description)
                 && !string.IsNullOrWhiteSpace(description.GetString()), $"Missing job field guidance for {name}: {request}");
         var level = schemas.GetProperty("JobOfferResponse").GetProperty("properties").GetProperty("level");
-        Assert.True(level.TryGetProperty("description", out var levelDescription) && !string.IsNullOrWhiteSpace(levelDescription.GetString()),
+        var alternatives = level.GetProperty("oneOf").EnumerateArray().ToArray();
+        Assert.Equal(2, alternatives.Length);
+        Assert.Single(alternatives, item => item.TryGetProperty("type", out var type) && type.GetString() == "null");
+        var reference = Assert.Single(alternatives, item => item.TryGetProperty("$ref", out _));
+        Assert.Equal("#/components/schemas/JobLevelResponse", reference.GetProperty("$ref").GetString());
+        Assert.True(reference.TryGetProperty("description", out var levelDescription) && !string.IsNullOrWhiteSpace(levelDescription.GetString()),
             $"Missing existing level-reference guidance: {level}");
     }
 }
