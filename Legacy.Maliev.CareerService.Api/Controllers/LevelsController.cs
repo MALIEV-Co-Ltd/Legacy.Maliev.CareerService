@@ -15,7 +15,7 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
 {
     /// <summary>Creates a job level.</summary>
     /// <param name="cancellationToken">Request cancellation.</param>
-    /// <param name="request">The job level name and description.</param>
+    /// <param name="request" example="{&quot;name&quot;:&quot;วิศวกร&quot;,&quot;description&quot;:&quot;Original fixture&quot;}">The job level name and description.</param>
     /// <response code="201">The created job level, with its service-assigned identifier.</response>
     [HttpPost]
     [RequirePermission(JobOfferPermissions.LevelsCreate)]

@@ -57,6 +57,7 @@
     </member>
     <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobLevelRequest.Name">
       <summary>The job level name.</summary>
+      <example>"วิศวกร"</example>
     </member>
     <member name="P:Legacy.Maliev.CareerService.Application.Models.UpsertJobLevelRequest.Description">
       <summary>The job level description text.</summary>
