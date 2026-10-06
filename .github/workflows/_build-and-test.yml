@@ -39,6 +39,9 @@ jobs:
         with:
           solution: Legacy.Maliev.CareerService.slnx
           use-local-maliev-dependencies: 'true'
+      - name: Validate safe scaffold orchestration
+        shell: pwsh
+        run: ./tooling/Test-CareerScaffoldContract.ps1 -EvidencePath ./runner-results/career-scaffold-orchestration.json
       - name: Gate owned production coverage
         run: python3 scripts/verify-runner-coverage.py runner-results
       - name: Preserve validation evidence

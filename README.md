@@ -60,3 +60,12 @@ dotnet test --no-build
 dotnet format Legacy.Maliev.CareerService.slnx --verify-no-changes --no-restore
 dotnet list package --vulnerable --include-transitive
 ```
+
+
+## Actual external scaffold proof
+
+The safe scaffold preview selects the prebuilt Release graph and a private
+default-off `EnableCareerScaffoldDesignTime` opt-in. The hosted regression reuses
+the disposable lifecycle fixture to generate, compile and query a distinct
+Offer/Level context. See `docs/career-actual-scaffold-proof-20261006.md` for scope
+and pending validation.
