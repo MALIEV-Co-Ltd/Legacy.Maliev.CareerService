@@ -8,8 +8,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+[Collection("Career scaffold runtime")]
 public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixture) : IClassFixture<CareerLifecycleFixture>
 {
+    [Fact]
+    public async Task Scaffold_ActualEfPreviewBuildAndGeneratedQueriesPreserveMigratedOwnedGraph()
+    {
+        await fixture.ResetAsync();
+        var (level, offer) = await SeedAsync();
+        await CareerScaffoldRuntimeProof.RunAsync(fixture, level.Id, offer.Id);
+    }
+
     [Theory]
     [InlineData("offer")]
     [InlineData("level")]
