@@ -24,6 +24,8 @@ public sealed class CareerProductionPipelineHttpTests(CareerLifecycleFixture fix
     {
         await using var host = NewHost();
         Assert.Equal("Production", host.Services.GetRequiredService<IWebHostEnvironment>().EnvironmentName);
+        Assert.Contains(AllowedOrigin, host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>>()
+            .Value.GetPolicy("__DefaultCorsPolicy")!.Origins);
         using var client = host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         using var request = new HttpRequestMessage(HttpMethod.Options, "/Jobs/1");
         request.Headers.Add("Origin", allowed ? AllowedOrigin : "https://blocked.example.invalid");
@@ -51,6 +53,8 @@ public sealed class CareerProductionPipelineHttpTests(CareerLifecycleFixture fix
     public async Task ProductionAnonymousMutation_ReturnsUnauthorizedWithConfiguredOriginForBrowserErrorHandling()
     {
         await using var host = NewHost();
+        Assert.Contains(AllowedOrigin, host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>>()
+            .Value.GetPolicy("__DefaultCorsPolicy")!.Origins);
         using var client = host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         using var request = new HttpRequestMessage(HttpMethod.Put, "/Jobs/1")
         {
@@ -92,6 +96,10 @@ public sealed class CareerProductionPipelineHttpTests(CareerLifecycleFixture fix
         }
     }
 
-    private WebApplicationFactory<Program> NewHost() => fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
-        configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CORS:AllowedOrigins:0"] = AllowedOrigin })));
+    private WebApplicationFactory<Program> NewHost() => fixture.Factory.WithWebHostBuilder(builder =>
+    {
+        builder.UseSetting("CORS:AllowedOrigins:0", AllowedOrigin);
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["CORS:AllowedOrigins:0"] = AllowedOrigin }));
+    });
 }
