@@ -37,8 +37,8 @@ public sealed class CareerRepository(CareerDbContext dbContext) : ICareerReposit
         query = sort switch
         {
             JobSortType.JobId_Descending => query.OrderByDescending(offer => offer.Id),
-            JobSortType.JobCreatedDate_Ascending => query.OrderBy(offer => offer.CreatedDate),
-            JobSortType.JobCreatedDate_Descending => query.OrderByDescending(offer => offer.CreatedDate),
+            JobSortType.JobCreatedDate_Ascending => query.OrderBy(offer => offer.CreatedDate != null).ThenBy(offer => offer.CreatedDate),
+            JobSortType.JobCreatedDate_Descending => query.OrderBy(offer => offer.CreatedDate == null).ThenByDescending(offer => offer.CreatedDate),
             _ => query.OrderBy(offer => offer.Id),
         };
         var items = await query
