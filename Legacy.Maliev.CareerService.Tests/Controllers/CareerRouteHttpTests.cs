@@ -219,6 +219,69 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
     }
 
     [Theory]
+    [InlineData("title")]
+    [InlineData("introduction")]
+    [InlineData("whatWeOffer")]
+    [InlineData("location")]
+    [InlineData("description")]
+    public async Task AnonymousSearch_AllSourceTextFieldsPreserveLiteralCharactersAndSignificantSpaces(string field)
+    {
+        foreach (var search in new[] { "%", "_", "\\", "ช่าง", "  Padded  " })
+        {
+            await fixture.ResetAsync();
+            var levelId = await fixture.SeedLevelAsync();
+            await using var db = fixture.Context();
+            var matched = new JobOffer { LevelId = levelId };
+            var unrelated = new JobOffer { LevelId = levelId };
+            SetSearchField(matched, field, "Prefix" + search + "Suffix");
+            SetSearchField(unrelated, field, search == "  Padded  " ? "Padded" : "Unrelated");
+            db.Offers.AddRange(matched, unrelated);
+            await db.SaveChangesAsync();
+            using var client = fixture.Client();
+            using var response = await client.GetAsync("/Jobs?search=" + Uri.EscapeDataString(search));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(1, json.RootElement.GetProperty("totalItems").GetInt32());
+            var item = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
+            Assert.Equal(matched.Id, item.GetProperty("id").GetInt32());
+            Assert.Equal("Prefix" + search + "Suffix", item.GetProperty(field).GetString());
+            Assert.Equal(2, await db.Offers.CountAsync());
+        }
+    }
+
+    [Theory]
+    [InlineData("prerequisites")]
+    [InlineData("level")]
+    public async Task AnonymousSearch_DoesNotExpandSourceFieldsToPrerequisitesOrLinkedLevel(string field)
+    {
+        await fixture.ResetAsync();
+        await using var db = fixture.Context();
+        var level = new JobLevel { Name = field == "level" ? "OnlyExcludedMarker" : "Unrelated", Description = "Unrelated" };
+        db.Levels.Add(level);
+        await db.SaveChangesAsync();
+        db.Offers.Add(new JobOffer { LevelId = level.Id, Title = "Unrelated", Prerequisites = field == "prerequisites" ? "OnlyExcludedMarker" : null });
+        await db.SaveChangesAsync();
+        using var client = fixture.Client();
+        using var response = await client.GetAsync("/Jobs?search=OnlyExcludedMarker");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(1, await db.Offers.CountAsync());
+        Assert.Equal(1, await db.Levels.CountAsync());
+    }
+
+    private static void SetSearchField(JobOffer offer, string field, string value)
+    {
+        switch (field)
+        {
+            case "title": offer.Title = value; break;
+            case "introduction": offer.Introduction = value; break;
+            case "whatWeOffer": offer.WhatWeOffer = value; break;
+            case "location": offer.Location = value; break;
+            case "description": offer.Description = value; break;
+            default: throw new ArgumentOutOfRangeException(nameof(field));
+        }
+    }
+
+    [Theory]
     [InlineData("Jobs", "legacy-career.jobs.create")]
     [InlineData("jobs/levels", "legacy-career.levels.create")]
     public async Task NullCreateBody_Is400WithoutPersistence(string route, string permission)
