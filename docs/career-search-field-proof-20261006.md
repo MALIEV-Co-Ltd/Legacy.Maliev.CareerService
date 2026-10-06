@@ -1,0 +1,5 @@
+The legacy Jobs controller searches ID or title, introduction, whatWeOffer, location and description. It does not search prerequisites or the linked level, and preserves significant padding in nonempty textual terms. Current repository behavior already implements this field set and literal PostgreSQL ILIKE escaping; no production correction is asserted or introduced.
+
+Seven added anonymous HTTP/PostgreSQL regression cases extend title-only literal-character coverage to all five source text fields (%/_/backslash/Thai/significant spaces), and prove that prerequisites and linked level names do not widen the search. The existing fixture is reused, avoiding another container pair. Original156 cases remain unchanged. Full163/new7 are unexecuted forecasts until hosted validation; this test-only bundle does not prove SQL Server collation parity, whole-source closure or consumer migration.
+
+Source checkpoint135e526d0dab85c415b3afdcefd7b70fe2c82e2f:Maliev.JobService.Api/Controllers/JobsController.cs. Accepted baseaedd07b11401fce73f151f0f21998f7640f1840c. No production code, DTOs, routes, dependency pins, coverage rules, deployment or persistent data changes.
