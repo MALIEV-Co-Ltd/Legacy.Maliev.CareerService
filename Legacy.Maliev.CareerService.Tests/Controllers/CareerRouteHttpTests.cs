@@ -207,6 +207,57 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         using var beyond = await client.GetAsync($"/Jobs?sort={sort}&index=3&size=1"); Assert.Equal(HttpStatusCode.NotFound, beyond.StatusCode);
     }
 
+    [Theory]
+    [InlineData("JobCreatedDate_Ascending", false)]
+    [InlineData("JobCreatedDate_Descending", true)]
+    public async Task AnonymousNullableCreatedDateSort_PreservesSourceNullPlacementAcrossPages(string sort, bool descending)
+    {
+        await fixture.ResetAsync();
+        var levelId = await fixture.SeedLevelAsync();
+        await using var db = fixture.Context();
+        var undated = new JobOffer { LevelId = levelId, Title = "Undated fixture" };
+        var earliest = new JobOffer { LevelId = levelId, Title = "Earliest fixture", CreatedDate = new DateTime(2020, 1, 1) };
+        var middle = new JobOffer { LevelId = levelId, Title = "Middle fixture", CreatedDate = new DateTime(2020, 1, 2) };
+        var latest = new JobOffer { LevelId = levelId, Title = "Latest fixture", CreatedDate = new DateTime(2020, 1, 3) };
+        db.Offers.AddRange(middle, undated, latest, earliest);
+        await db.SaveChangesAsync();
+        await db.Offers.Where(offer => offer.Id == undated.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(offer => offer.CreatedDate, (DateTime?)null));
+        Assert.Null(await db.Offers.AsNoTracking().Where(offer => offer.Id == undated.Id)
+            .Select(offer => offer.CreatedDate).SingleAsync());
+        var before = await db.Offers.AsNoTracking().OrderBy(offer => offer.Id).ToArrayAsync();
+        var beforeLevel = await db.Levels.AsNoTracking().SingleAsync();
+        var expected = descending
+            ? new[] { latest.Id, middle.Id, earliest.Id, undated.Id }
+            : new[] { undated.Id, earliest.Id, middle.Id, latest.Id };
+        using var client = fixture.Client();
+        using var response = await client.GetAsync($"/Jobs?sort={sort}&index=1&size=4");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = json.RootElement.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Equal(expected, items.Select(item => item.GetProperty("id").GetInt32()).ToArray());
+        Assert.Equal(4, json.RootElement.GetProperty("totalItems").GetInt32());
+        Assert.False(items.Single(item => item.GetProperty("id").GetInt32() == undated.Id).TryGetProperty("createdDate", out _));
+        for (var index = 1; index <= expected.Length; index++)
+        {
+            using var pageResponse = await client.GetAsync($"/Jobs?sort={sort}&index={index}&size=1");
+            Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+            using var pageJson = JsonDocument.Parse(await pageResponse.Content.ReadAsStringAsync());
+            var page = pageJson.RootElement;
+            Assert.Equal(index, page.GetProperty("pageIndex").GetInt32());
+            Assert.Equal(4, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(4, page.GetProperty("totalPages").GetInt32());
+            Assert.Equal(index > 1, page.GetProperty("hasPreviousPage").GetBoolean());
+            Assert.Equal(index < 4, page.GetProperty("hasNextPage").GetBoolean());
+            Assert.Equal(expected[index - 1], Assert.Single(page.GetProperty("items").EnumerateArray()).GetProperty("id").GetInt32());
+        }
+        using var beyond = await client.GetAsync($"/Jobs?sort={sort}&index=5&size=1");
+        Assert.Equal(HttpStatusCode.NotFound, beyond.StatusCode);
+        var after = await db.Offers.AsNoTracking().OrderBy(offer => offer.Id).ToArrayAsync();
+        Assert.Equal(JsonSerializer.Serialize(before), JsonSerializer.Serialize(after));
+        Assert.Equal(JsonSerializer.Serialize(beforeLevel), JsonSerializer.Serialize(await db.Levels.AsNoTracking().SingleAsync()));
+    }
+
     [Fact]
     public async Task NumericSearch_PreservesSourceIdOrTextRatherThanExclusiveIdRule()
     {
