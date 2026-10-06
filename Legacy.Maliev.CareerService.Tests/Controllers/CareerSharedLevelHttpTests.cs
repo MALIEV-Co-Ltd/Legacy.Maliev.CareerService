@@ -14,6 +14,171 @@ public sealed class CareerSharedLevelCollection;
 public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
     [Theory]
+    [InlineData("offer", "")]
+    [InlineData("offer", "  Literal value  ")]
+    [InlineData("offer", "วิศวกร")]
+    [InlineData("level", "")]
+    [InlineData("level", "  Literal value  ")]
+    [InlineData("level", "วิศวกร")]
+    public async Task SourceWriteWhitelist_IgnoresForgedIdentityDatesAndNestedGraphWhilePreservingLiteralFields(string kind, string value)
+    {
+        var levelId = await SeedAsync();
+        var originalOffers = await OffersAsync();
+        await using var db = fixture.Context();
+        var originalLevel = await db.Levels.AsNoTracking().SingleAsync();
+        const int forgedId = 2147483000;
+        var forgedDate = new DateTime(1980, 1, 1);
+        var route = kind == "offer" ? "/Jobs" : "/jobs/levels";
+        var permission = kind == "offer" ? "legacy-career.jobs" : "legacy-career.levels";
+        object Payload(string text) => kind == "offer"
+            ? new
+            {
+                Id = forgedId,
+                CreatedDate = forgedDate,
+                ModifiedDate = forgedDate,
+                LevelId = levelId,
+                Title = text,
+                Description = text,
+                Prerequisites = text,
+                IsFilled = true,
+                Introduction = "Forged introduction",
+                WhatWeOffer = "Forged benefits",
+                Location = "Forged location",
+                Level = new
+                {
+                    Id = forgedId,
+                    Name = "Forged level",
+                    Description = "Forged description"
+                }
+            }
+            : (object)new
+            {
+                Id = forgedId,
+                CreatedDate = forgedDate,
+                ModifiedDate = forgedDate,
+                Name = text,
+                Description = text,
+                Offers = new[]
+                {
+                    new
+                    {
+                        Id = forgedId,
+                        Title = "Forged offer",
+                        LevelId = forgedId
+                    }
+                }
+            };
+        var started = DateTime.UtcNow.AddSeconds(-5);
+        using var creator = fixture.Client(permission + ".create");
+        using var created = await creator.PostAsJsonAsync(route, Payload(value));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = createdJson.RootElement.GetProperty("id").GetInt32();
+        Assert.True(id > 0);
+        Assert.NotEqual(forgedId, id);
+        Assert.EndsWith(route + "/" + id, created.Headers.Location!.ToString(), StringComparison.OrdinalIgnoreCase);
+        DateTime? createdDate;
+        if (kind == "offer")
+        {
+            var row = await db.Offers.AsNoTracking().SingleAsync(item => item.Id == id);
+            Assert.Equal(value, row.Title);
+            Assert.Equal(value, row.Description);
+            Assert.Equal(value, row.Prerequisites);
+            Assert.True(row.IsFilled);
+            Assert.Equal(levelId, row.LevelId);
+            Assert.Null(row.Introduction);
+            Assert.Null(row.WhatWeOffer);
+            Assert.Null(row.Location);
+            createdDate = row.CreatedDate;
+            Assert.NotNull(createdDate);
+            Assert.NotEqual(forgedDate, row.CreatedDate);
+            Assert.NotEqual(forgedDate, row.ModifiedDate);
+            Assert.NotNull(row.ModifiedDate);
+            Assert.InRange(row.ModifiedDate.Value, started, DateTime.UtcNow.AddMinutes(1));
+            Assert.Equal(3, await db.Offers.CountAsync());
+            Assert.Equal(originalLevel.Name, (await db.Levels.AsNoTracking().SingleAsync()).Name);
+            // Imported rich fields are readable but remain outside both mutation whitelists.
+            var imported = await db.Offers.SingleAsync(item => item.Id == id);
+            imported.Introduction = "Imported introduction";
+            imported.WhatWeOffer = "Imported benefits";
+            imported.Location = "Imported location";
+            await db.SaveChangesAsync();
+            db.ChangeTracker.Clear();
+        }
+        else
+        {
+            var row = await db.Levels.AsNoTracking().SingleAsync(item => item.Id == id);
+            Assert.Equal(value, row.Name);
+            Assert.Equal(value, row.Description);
+            createdDate = row.CreatedDate;
+            Assert.NotNull(createdDate);
+            Assert.NotEqual(forgedDate, row.CreatedDate);
+            Assert.NotEqual(forgedDate, row.ModifiedDate);
+            Assert.NotNull(row.ModifiedDate);
+            Assert.InRange(row.ModifiedDate.Value, started, DateTime.UtcNow.AddMinutes(1));
+            Assert.Equal(2, await db.Levels.CountAsync());
+            Assert.Equal(originalOffers, await OffersAsync());
+        }
+        Assert.InRange(createdDate!.Value, started, DateTime.UtcNow.AddMinutes(1));
+        Assert.Equal(originalOffers, await OffersAsync(id, kind));
+        var replacement = value + "Updated";
+        var updateStarted = DateTime.UtcNow.AddSeconds(-5);
+        using var writer = fixture.Client(permission + ".update");
+        using var updated = await writer.PutAsJsonAsync(route + "/" + id, Payload(replacement));
+        Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
+        Assert.Equal(string.Empty, await updated.Content.ReadAsStringAsync());
+        if (kind == "offer")
+        {
+            var row = await db.Offers.AsNoTracking().SingleAsync(item => item.Id == id);
+            Assert.Equal(replacement, row.Title);
+            Assert.Equal(replacement, row.Description);
+            Assert.Equal(replacement, row.Prerequisites);
+            Assert.Equal(createdDate, row.CreatedDate);
+            Assert.NotEqual(forgedDate, row.ModifiedDate);
+            Assert.NotNull(row.ModifiedDate);
+            Assert.InRange(row.ModifiedDate.Value, updateStarted, DateTime.UtcNow.AddMinutes(1));
+            Assert.True(row.ModifiedDate >= createdDate);
+            Assert.Equal(levelId, row.LevelId);
+            Assert.Equal("Imported introduction", row.Introduction);
+            Assert.Equal("Imported benefits", row.WhatWeOffer);
+            Assert.Equal("Imported location", row.Location);
+            Assert.Equal(3, await db.Offers.CountAsync());
+            var unchanged = await db.Levels.AsNoTracking().SingleAsync();
+            Assert.Equal(originalLevel.Name, unchanged.Name);
+            Assert.Equal(originalLevel.Description, unchanged.Description);
+            Assert.Equal(originalLevel.CreatedDate, unchanged.CreatedDate);
+            Assert.Equal(originalLevel.ModifiedDate, unchanged.ModifiedDate);
+        }
+        else
+        {
+            var row = await db.Levels.AsNoTracking().SingleAsync(item => item.Id == id);
+            Assert.Equal(replacement, row.Name);
+            Assert.Equal(replacement, row.Description);
+            Assert.Equal(createdDate, row.CreatedDate);
+            Assert.NotEqual(forgedDate, row.ModifiedDate);
+            Assert.NotNull(row.ModifiedDate);
+            Assert.InRange(row.ModifiedDate.Value, updateStarted, DateTime.UtcNow.AddMinutes(1));
+            Assert.True(row.ModifiedDate >= createdDate);
+            Assert.Equal(2, await db.Levels.CountAsync());
+            Assert.Equal(originalOffers, await OffersAsync());
+        }
+        using var reader = fixture.Client();
+        using var detail = await reader.GetAsync(route + "/" + id);
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        using var detailJson = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
+        Assert.Equal(id, detailJson.RootElement.GetProperty("id").GetInt32());
+        Assert.Equal(replacement, detailJson.RootElement.GetProperty(kind == "offer" ? "title" : "name").GetString());
+        Assert.Equal(originalOffers, await OffersAsync(id, kind));
+        var retainedLevel = await db.Levels.AsNoTracking().SingleAsync(item => item.Id == levelId);
+        Assert.Equal(originalLevel.Name, retainedLevel.Name);
+        Assert.Equal(originalLevel.Description, retainedLevel.Description);
+        Assert.Equal(originalLevel.CreatedDate, retainedLevel.CreatedDate);
+        Assert.Equal(originalLevel.ModifiedDate, retainedLevel.ModifiedDate);
+        Assert.False(await db.Offers.AnyAsync(item => item.Id == forgedId));
+        Assert.False(await db.Levels.AnyAsync(item => item.Id == forgedId));
+    }
+
+    [Theory]
     [InlineData("", "")]
     [InlineData("  Literal level  ", "  Literal description  ")]
     [InlineData("วิศวกร", "รายละเอียดระดับ")]
@@ -168,10 +333,10 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         return level.Id;
     }
 
-    private async Task<string> OffersAsync()
+    private async Task<string> OffersAsync(int? newId = null, string? kind = null)
     {
         await using var db = fixture.Context();
-        return JsonSerializer.Serialize(await db.Offers.AsNoTracking().OrderBy(row => row.Id)
+        return JsonSerializer.Serialize(await db.Offers.AsNoTracking().Where(row => kind != "offer" || row.Id != newId).OrderBy(row => row.Id)
             .Select(row => new { row.Id, row.LevelId, row.Title, row.Description, row.Prerequisites, row.Introduction, row.WhatWeOffer, row.Location, row.IsFilled, row.CreatedDate, row.ModifiedDate }).ToArrayAsync());
     }
 
