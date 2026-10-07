@@ -21,6 +21,24 @@ public sealed class WorkflowContractTests
     }
 
     [Theory]
+    [InlineData("actions/upload-artifact@v7.0.1")]
+    [InlineData("actions/upload-artifact@main # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a")]
+    [InlineData("actions/upload-artifact@0000000000000000000000000000000000000000")]
+    [InlineData("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02")]
+    public void BuildAndTest_RejectsUnreviewedArtifactUploadPin(string replacement)
+    {
+        AssertMutationRejected("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", replacement);
+    }
+
+    [Theory]
+    [InlineData("          archive: true", "          archive: false")]
+    [InlineData("          archive: true", "")]
+    public void BuildAndTest_RejectsMissingOrDisabledZipArchive(string original, string replacement)
+    {
+        AssertMutationRejected(original, replacement);
+    }
+
+    [Theory]
     [InlineData("shell: pwsh", "shell: bash")]
     [InlineData("./tooling/Test-CareerScaffoldContract.ps1", "./tooling/UnreviewedScaffold.ps1")]
     [InlineData("./runner-results/career-scaffold-orchestration.json", "./discarded-scaffold-evidence.json")]
@@ -248,17 +266,18 @@ internal static partial class WorkflowContractValidator
 
         RequireScalarValue(evidence, "name", "Preserve validation evidence");
         RequireScalarValue(evidence, "if", "always()");
-        RequireScalarValue(evidence, "uses", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+        RequireScalarValue(evidence, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
         var evidenceInputs = RequireMapping(evidence, "with");
-        if (evidenceInputs.Children.Count != 4)
+        if (evidenceInputs.Children.Count != 5)
         {
-            throw new InvalidOperationException("Evidence upload must have exactly four bounded inputs.");
+            throw new InvalidOperationException("Evidence upload must have exactly five bounded inputs.");
         }
 
         RequireScalarValue(evidenceInputs, "name", "career-validation-${{ github.sha }}");
         RequireScalarValue(evidenceInputs, "path", "runner-results");
         RequireScalarValue(evidenceInputs, "if-no-files-found", "warn");
         RequireScalarValue(evidenceInputs, "retention-days", "7");
+        RequireScalarValue(evidenceInputs, "archive", "true");
 
         ValidateStep(
             steps.Children[0],
