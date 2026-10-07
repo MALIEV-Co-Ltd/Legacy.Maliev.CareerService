@@ -52,3 +52,4 @@ jobs:
           path: runner-results
           if-no-files-found: warn
           retention-days: 7
+          archive: true
