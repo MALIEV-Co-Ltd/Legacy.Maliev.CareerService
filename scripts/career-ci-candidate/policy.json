@@ -1,0 +1,116 @@
+{
+  "baseCommit": "3b18b5ef124c35c2f4aa6a3ccc5e89ebf904e8b2",
+  "archiveBytes": 37990,
+  "archiveSha256": "78d5416aa2ab94beba81ca5a90ffcbc2f50f66fa53eb32f97c579c58a7a09cf7",
+  "files": [
+    {
+      "path": "Legacy.Maliev.CareerService.Application/Models/CareerModels.cs",
+      "bytes": 2463,
+      "sha256": "da46591e679bf07d4c85fc86861349ab810a99761e85daf1d7a58050ed3f893e",
+      "preimageSha256": "966e9daa390192879c0fd961de78c8ec6f1be77dc50c758520975e1d8266697f"
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Application/Services/CareerApplicationService.cs",
+      "bytes": 5727,
+      "sha256": "3223ad1ca63b70628bd71240a8c7b1d59bc6b2fd87158d7872c496402b92815b",
+      "preimageSha256": "e1048869498d711119ca5b1bf2d38e5f2a04e97da17096cab6ec34d9820ff3a5"
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerLevelCollectionWireParityHttpTests.cs",
+      "bytes": 5231,
+      "sha256": "9ac2a71e5b136da6cac4a6a1406a65f93a83d80dbe02a6e65048414ccfd6b688",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerLifecycleAcceptanceTests.cs",
+      "bytes": 15690,
+      "sha256": "533aa4e00ac8333b9006b13cac500dfa28d090ebc2d1c9b8af5063af627bc8a7",
+      "preimageSha256": "f454b2f148b9680f1a62e0723ed9e2b1ba3ce012f3a03655ab2b2f0a4afeccb3"
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerOfferLevelReassignmentHttpTests.cs",
+      "bytes": 8125,
+      "sha256": "b2681fa8b3727468e41a1d0335cbc75d1ed8aae9eb6b5076cc1c3966b328637e",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerOriginalFilterAndNullUpdateHttpTests.cs",
+      "bytes": 7489,
+      "sha256": "1a6e5accb52810757a9bfdf9efcab520892e600fc144353287af13a53cb1ff01",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerOriginalLevelReadHttpTests.cs",
+      "bytes": 1396,
+      "sha256": "f788b6518d62fa40f3b6a6b78afba19295c15e79815aa1d860b60a07d570d356",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerOriginalMutationParityHttpTests.cs",
+      "bytes": 5601,
+      "sha256": "18c5823b4dc2e38051e8a402d99252ee792b426b979ea4127cdef0d9f6a68a2d",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerOriginalOfferReadHttpTests.cs",
+      "bytes": 1546,
+      "sha256": "f8ba8505031837b3e858145b7b668e060e34efc4d6f373a9d9f4e44957154b10",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerOriginalOpenPositionParityHttpTests.cs",
+      "bytes": 1674,
+      "sha256": "f90847c62879daf2d18d832c6d113a77ce7db36d0aadf10afa86114d805c6210",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerOriginalPaginationParityHttpTests.cs",
+      "bytes": 5410,
+      "sha256": "14b3bd86d77b0b7d40bb15950b154a0ddea426daa747ca466a713ac0542dea49",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteFixtureLifetime.cs",
+      "bytes": 6468,
+      "sha256": "6d0399f8db175a9016c3cb52ee15f058370ba9670a5e11c3db7c1e6eec2762b8",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteFixtureLifetimeTests.cs",
+      "bytes": 11109,
+      "sha256": "d4683469b57f9b9b17f4fee167d6607c7ac9f9914a63692a242c985583252513",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteFixtureNativeResourceTests.cs",
+      "bytes": 6192,
+      "sha256": "86e08c8ad74f2cf8384e73b72b9be31d3ea84b95c672b689a11bee67ab34a5dc",
+      "preimageSha256": null
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteHttpTests.cs",
+      "bytes": 30325,
+      "sha256": "137005e15a6e0f917964cc121f4fd3c2e4fe4b3e29e97cc10654da982883edb1",
+      "preimageSha256": "492edc917e14ebc65743a7ee9bcaab40a5cada3195c5868a5d77765ed10f6cfe"
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerSelectedDeletionIsolationHttpTests.cs",
+      "bytes": 11487,
+      "sha256": "838e9ce3f6ea97308b061497509a54134eda41426f4f56a894162ad54691f6a8",
+      "preimageSha256": "42379dbc9bfa9365747f19ad68f6bfb1f2079d234fd2167b40bfa388f0d813d9"
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerSharedLevelHttpTests.cs",
+      "bytes": 19237,
+      "sha256": "1cbfd4fe6632fa88595e6283bc0567bf946edc98591e7c2ced795920fb2e985a",
+      "preimageSha256": "dc67b08292d95de22a39a084ae40116d07946f84bb6a9601b7287a217f23336a"
+    },
+    {
+      "path": "Legacy.Maliev.CareerService.Tests/Controllers/CareerSourcePaginationCardinalityHttpTests.cs",
+      "bytes": 3559,
+      "sha256": "976767015272f61fa6c69b3e71edd2bb0c29b54ef3a4a54e2c8dba760cd196e8",
+      "preimageSha256": "4f46601fed3cb8554b002b011e3101fe700ab175b192d6ac005b58ce45d4bded"
+    }
+  ],
+  "nativeResults": 0
+}
