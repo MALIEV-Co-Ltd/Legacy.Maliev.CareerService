@@ -1,0 +1,17 @@
+# Career exhausted-page correctness
+
+Protected base `c4c5e826f1eb75f7d6f734ae34968e8be6b8520c`. Preserve all199 accepted cases, including188 preceding originals, nested Auth, normal HTTP bodies, direct Level offers and offer association invariants. Add the exact frozen14-case PostgreSQL HTTP offset harness in an isolated fresh checkout; preserved old offset draft remains untouched. No production change in this tests-only baseline.
+
+Current and original implementation multiply page index and size as unchecked Int32. Large positive Int32 inputs can wrap into earlier pages or negative SQL offsets. This slice corrects an inherited arithmetic defect, separately from literal source parity. Forecast213 cases; actual compiler/runtime result must determine baseline RED. Existing maximum-index size1 and ordinary exhausted-page controls must pass. Setup/compiler/dependency/timeout failures are not behavioral RED.
+
+Regressions cover both anonymous route casings, both ID orders, filtered and unfiltered cohorts, exact page JSON/current totalItems, omitted-size and ordinary page controls before/after the boundary request, open-position status and full physical Offer/Level plus xmin snapshots. A failing status assertion does not execute later physical invariants; green repair must complete every assertion. No page-size cap, normalization, search/sort/wire/auth/schema change is admitted.
+
+After independent actual RED review, consider only Int64 offset, filtered-count bound before narrowing, and existing empty response metadata in CareerRepository. All full source SHAs/parents/blobs are retained in the off-repository matrix. Whole source paths/SHAs stay OPEN. Original SQL-host and genuine deployed IAM/Web/Intranet consumer qualification remain NOT RUN. Hosted normal PR validation under owner-approved draft timing exception; no local SDK/provider allocation. No deployment, persistent-data work, shared tracking edits, foreign cleanup, other-writer changes or dependency adoption.
+
+## Reviewed producer repair
+
+Actual tests-only head `fd53f9e6178b1efbc3b93bc8d1b8d13d67503936` runtime failures after a strict Release build were independently reviewed before this repair. Offset now computes in Int64 and returns existing empty-page metadata when it exhausts the filtered Int32 count, before narrowing for SQL Skip. All213 tests and all other production/auth/dependency/workflow bytes remain unchanged. This corrects the inherited unchecked arithmetic bug; exact repair-head full/focused/raw/static evidence and protected post-main CI remain required. Original source SQL/genuine IAM/consumer and whole source closure remain unqualified.
+
+## Hosted formatting correction
+
+Initial repair head `892fe12dc40cfa2ed60c5a3c03e6c951999b93f5` passed strict Release and all213 tests but failed formatting on the frozen new offset test. Only actual diagnosed whitespace is corrected; every test token and assertion is preserved. Production repair and all199 original tests remain byte-identical. Exact corrected-head full/static validation remains required.

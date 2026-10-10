@@ -41,8 +41,15 @@ public sealed class CareerRepository(CareerDbContext dbContext) : ICareerReposit
             JobSortType.JobCreatedDate_Descending => query.OrderBy(offer => offer.CreatedDate == null).ThenByDescending(offer => offer.CreatedDate),
             _ => query.OrderBy(offer => offer.Id),
         };
+        var offset = (pageIndex - 1L) * pageSize;
+        if (offset >= totalItems)
+        {
+            return new PaginatedJobOfferResponse(
+                [], pageIndex, totalPages, totalItems, pageIndex > 1, pageIndex < totalPages);
+        }
+
         var items = await query
-            .Skip((pageIndex - 1) * pageSize)
+            .Skip((int)offset)
             .Take(pageSize)
             .Select(offer => new JobOfferResponse(
                 offer.Id,
