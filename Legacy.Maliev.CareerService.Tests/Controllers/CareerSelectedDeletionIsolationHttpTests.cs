@@ -112,7 +112,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
             using var detail = await reader.GetAsync($"/jobs/Levels/{level.Id}");
             Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
             using var json = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
-            AssertLevel(json.RootElement, level);
+            AssertLevel(json.RootElement, level, direct: true);
         }
         using (var list = await reader.GetAsync("/jobs/Levels"))
         {
@@ -120,7 +120,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
             using var json = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
             var items = json.RootElement.EnumerateArray().ToArray();
             Assert.Equal(levels.Select(level => level.Id).OrderBy(id => id).ToArray(), items.Select(item => item.GetProperty("id").GetInt32()).ToArray());
-            foreach (var item in items) AssertLevel(item, levels.Single(level => level.Id == item.GetProperty("id").GetInt32()));
+            foreach (var item in items) AssertLevel(item, levels.Single(level => level.Id == item.GetProperty("id").GetInt32()), direct: true);
         }
         using var repeated = await writer.DeleteAsync($"/Jobs/{target.Id}");
         Assert.Equal(HttpStatusCode.NotFound, repeated.StatusCode);
@@ -170,14 +170,20 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
         AssertLevel(json.GetProperty("level"), level);
     }
 
-    private static void AssertLevel(JsonElement json, JobLevel level)
+    private static void AssertLevel(JsonElement json, JobLevel level, bool direct = false)
     {
         Assert.Equal(level.Id, json.GetProperty("id").GetInt32());
         Assert.Equal(level.Name, json.GetProperty("name").GetString());
         Assert.Equal(level.Description, json.GetProperty("description").GetString());
         Assert.Equal(level.CreatedDate, json.GetProperty("createdDate").GetDateTime());
         Assert.Equal(level.ModifiedDate, json.GetProperty("modifiedDate").GetDateTime());
-        Assert.False(json.TryGetProperty("offers", out _));
+        if (direct)
+        {
+            var offers = json.GetProperty("offers");
+            Assert.Equal(JsonValueKind.Array, offers.ValueKind);
+            Assert.Equal(0, offers.GetArrayLength());
+        }
+        else Assert.False(json.TryGetProperty("offers", out _));
         Assert.False(json.TryGetProperty("Id", out _));
     }
 

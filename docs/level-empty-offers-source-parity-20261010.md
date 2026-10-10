@@ -16,12 +16,20 @@ stored values and concurrency version remain unchanged; create checks persisted
 values, Location and normal permission checks. Controlled remote IAM transport
 does not prove deployed IAM readiness.
 
-This tests-only baseline preserves every existing test, production file, route,
-permission and dependency/workflow pin. Current selected-deletion tests still
-assert Offers absence; they are retained until actual baseline failure review.
-Linked collections and nested offer-level graphs require separate analysis.
-Do not change the producer DTO before reviewing actual runtime failure after a
-zero-warning/zero-error Release build. Compiler/setup failures are not behavior RED.
+The tests-only baseline at `ee7816f8d0efdf6091f5bfe4653b8284a78369be`
+completed hosted run `38042931251`: Release build 0 warnings/0 errors,
+185 original cases passed, three new cases failed specifically on missing Offers,
+and zero cases skipped. Raw artifacts and causal failures were independently reviewed.
+
+The repair adds an API-owned direct level response with the existing five scalar
+fields and the initialized empty Offers array. Only level list/detail/create
+outputs map to it. Shared application DTOs, nested Offer.Level wire shape,
+repository queries, auth, routes and dependency/workflow pins remain unchanged.
+Selected-deletion tests preserve every case and persistence/auth assertion while
+correcting only direct level expectations; nested Offers absence is retained.
+The new three-case baseline regression remains byte-for-byte unchanged.
+Linked/nested original graph parity and deployed IAM require separate evidence.
+Exact repair-head hosted validation is still required before acceptance.
 
 Local validation is NOT RUN: no local native allocation; another owner's finite
 allocation remains exclusive. A fresh memory snapshot does not grant SDK custody.

@@ -1,4 +1,5 @@
 using Legacy.Maliev.CareerService.Api.Authorization;
+using Legacy.Maliev.CareerService.Api.Models;
 using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Application.Models;
 using Maliev.Aspire.ServiceDefaults.Authorization;
@@ -19,11 +20,11 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     /// <response code="201">The created job level, with its service-assigned identifier.</response>
     [HttpPost]
     [RequirePermission(JobOfferPermissions.LevelsCreate)]
-    [ProducesResponseType<JobLevelResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<LevelResponse>(StatusCodes.Status201Created)]
     public async Task<ActionResult> CreateLevelAsync([FromBody] UpsertJobLevelRequest request, CancellationToken cancellationToken)
     {
         var created = await careerService.CreateLevelAsync(request, cancellationToken);
-        return CreatedAtRoute("GetLevel", new { levelId = created.Id }, created);
+        return CreatedAtRoute("GetLevel", new { levelId = created.Id }, ToResponse(created));
     }
 
     /// <summary>Deletes a job level.</summary>
@@ -49,20 +50,20 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     /// <param name="cancellationToken">Request cancellation.</param>
     [HttpGet("{levelId:int}", Name = "GetLevel")]
     [AllowAnonymous]
-    public async Task<ActionResult<JobLevelResponse>> GetLevelAsync(int levelId, CancellationToken cancellationToken)
+    public async Task<ActionResult<LevelResponse>> GetLevelAsync(int levelId, CancellationToken cancellationToken)
     {
         var level = await careerService.GetLevelByIdAsync(levelId, cancellationToken);
-        return level is null ? NotFound() : level;
+        return level is null ? NotFound() : ToResponse(level);
     }
 
     /// <summary>Returns all job levels.</summary>
     /// <param name="cancellationToken">Request cancellation.</param>
     [HttpGet]
     [AllowAnonymous]
-    public async Task<ActionResult<IReadOnlyList<JobLevelResponse>>> GetLevelsAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<LevelResponse>>> GetLevelsAsync(CancellationToken cancellationToken)
     {
         var levels = await careerService.GetLevelsAsync(cancellationToken);
-        return levels.Count == 0 ? NotFound() : levels.ToArray();
+        return levels.Count == 0 ? NotFound() : levels.Select(ToResponse).ToArray();
     }
 
     /// <summary>Updates a job level.</summary>
@@ -82,4 +83,11 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
         try { return await careerService.UpdateLevelAsync(levelId, request, cancellationToken) ? NoContent() : NotFound(); }
         catch (CareerConcurrencyException) { return Conflict("The career record changed during this request."); }
     }
+
+    private static LevelResponse ToResponse(JobLevelResponse level) => new(
+        level.Id,
+        level.Name,
+        level.Description,
+        level.CreatedDate,
+        level.ModifiedDate);
 }
