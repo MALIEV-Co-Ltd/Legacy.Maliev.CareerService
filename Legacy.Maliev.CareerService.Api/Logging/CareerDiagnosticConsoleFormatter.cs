@@ -58,7 +58,7 @@ public sealed class CareerDiagnosticConsoleFormatter : ConsoleFormatter
                     if (++count == 16) throw stop;
                 }, payload);
             }
-            catch (ScopeLimitException exception) when (ReferenceEquals(exception, stop)) { }
+            catch (ScopeLimitException budgetException) when (ReferenceEquals(budgetException, stop)) { }
         }
         writer.WriteLine(JsonSerializer.Serialize(payload));
     }
