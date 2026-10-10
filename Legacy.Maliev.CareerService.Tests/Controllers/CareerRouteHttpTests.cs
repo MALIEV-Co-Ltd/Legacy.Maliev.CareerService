@@ -560,6 +560,151 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         }
     }
 
+    [Theory]
+    [InlineData("JobCreatedDate_Ascending", false, 2000, 3000)]
+    [InlineData("JobCreatedDate_Descending", true, 3000, 2000)]
+    public async Task OriginalThousandAndOneDateCorpus_PreservesCompleteYearOrderAndPhysicalGraph(
+        string sort, bool descending, int firstYear, int lastYear)
+    {
+        using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        var cancellation = lifetime.Token;
+        await fixture.ResetAsync();
+        await using (var db = fixture.Context())
+        {
+            db.Offers.AddRange(Enumerable.Range(0, 1001).Select(index => new JobOffer
+            {
+                CreatedDate = new DateTime(2000 + index, 1, 1),
+                Level = new JobLevel
+                {
+                    Name = "test name",
+                    Description = "test description",
+                },
+            }));
+            await db.SaveChangesAsync(cancellation);
+            Assert.Equal(1001, await db.Offers.CountAsync(cancellation));
+            Assert.Equal(1001, await db.Levels.CountAsync(cancellation));
+        }
+
+        var before = await OriginalSortCorpusPhysicalSnapshotAsync(cancellation);
+        var expectedYears = Enumerable.Range(2000, 1001).ToArray();
+        if (descending)
+        {
+            Array.Reverse(expectedYears);
+        }
+
+        using var client = fixture.Client();
+        Assert.Null(client.DefaultRequestHeaders.Authorization);
+        foreach (var route in new[] { "/Jobs", "/jobs/" })
+        {
+            using var response = await client.GetAsync($"{route}?sort={sort}", cancellation);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
+            var page = json.RootElement;
+            Assert.Equal(1001, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
+            Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
+            Assert.False(page.GetProperty("hasPreviousPage").GetBoolean());
+            Assert.False(page.GetProperty("hasNextPage").GetBoolean());
+            var items = page.GetProperty("items").EnumerateArray().ToArray();
+            Assert.Equal(1001, items.Length);
+            Assert.Equal(1001, items.Select(item => item.GetProperty("id").GetInt32()).Distinct().Count());
+            var years = items.Select(item => item.GetProperty("createdDate").GetDateTime().Year).ToArray();
+            Assert.Equal(firstYear, years[0]);
+            Assert.Equal(lastYear, years[^1]);
+            Assert.Equal(expectedYears, years);
+        }
+
+        Assert.Equal(before, await OriginalSortCorpusPhysicalSnapshotAsync(cancellation));
+    }
+
+    [Theory]
+    [InlineData("JobId_Ascending", false, 1, 1000)]
+    [InlineData("JobId_Descending", true, 1000, 1)]
+    public async Task OriginalThousandExplicitIdCorpus_PreservesCompleteIdOrderAndPhysicalGraph(
+        string sort, bool descending, int firstId, int lastId)
+    {
+        using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        var cancellation = lifetime.Token;
+        await fixture.ResetAsync();
+        await using (var db = fixture.Context())
+        {
+            db.Offers.AddRange(Enumerable.Range(1, 1000).Select(id => new JobOffer
+            {
+                Id = id,
+                Level = new JobLevel
+                {
+                    Name = "test name",
+                    Description = "test description",
+                },
+            }));
+            await db.SaveChangesAsync(cancellation);
+            Assert.Equal(1000, await db.Offers.CountAsync(cancellation));
+            Assert.Equal(1000, await db.Levels.CountAsync(cancellation));
+        }
+
+        var before = await OriginalSortCorpusPhysicalSnapshotAsync(cancellation);
+        var expectedIds = Enumerable.Range(1, 1000).ToArray();
+        if (descending)
+        {
+            Array.Reverse(expectedIds);
+        }
+
+        using var client = fixture.Client();
+        Assert.Null(client.DefaultRequestHeaders.Authorization);
+        foreach (var route in new[] { "/Jobs", "/jobs/" })
+        {
+            using var response = await client.GetAsync($"{route}?sort={sort}", cancellation);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
+            var page = json.RootElement;
+            Assert.Equal(1000, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
+            Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
+            Assert.False(page.GetProperty("hasPreviousPage").GetBoolean());
+            Assert.False(page.GetProperty("hasNextPage").GetBoolean());
+            var ids = page.GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetInt32()).ToArray();
+            Assert.Equal(1000, ids.Length);
+            Assert.Equal(firstId, ids[0]);
+            Assert.Equal(lastId, ids[^1]);
+            Assert.Equal(expectedIds, ids);
+        }
+
+        Assert.Equal(before, await OriginalSortCorpusPhysicalSnapshotAsync(cancellation));
+    }
+
+    private async Task<string> OriginalSortCorpusPhysicalSnapshotAsync(CancellationToken cancellation)
+    {
+        await using var db = fixture.Context();
+        return JsonSerializer.Serialize(new
+        {
+            Offers = await db.Offers.AsNoTracking().OrderBy(row => row.Id).Select(row => new
+            {
+                row.Id,
+                row.LevelId,
+                row.Title,
+                row.Introduction,
+                row.Description,
+                row.Prerequisites,
+                row.WhatWeOffer,
+                row.Location,
+                row.IsFilled,
+                row.CreatedDate,
+                row.ModifiedDate,
+                Version = EF.Property<uint>(row, "Version"),
+            }).ToArrayAsync(cancellation),
+            Levels = await db.Levels.AsNoTracking().OrderBy(row => row.Id).Select(row => new
+            {
+                row.Id,
+                row.Name,
+                row.Description,
+                row.CreatedDate,
+                row.ModifiedDate,
+                Version = EF.Property<uint>(row, "Version"),
+            }).ToArrayAsync(cancellation),
+        });
+    }
+
     private static void SetSearchField(JobOffer offer, string field, string value)
     {
         switch (field)
