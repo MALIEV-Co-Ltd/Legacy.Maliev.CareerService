@@ -83,11 +83,20 @@ public sealed class CareerDiagnosticConsoleFormatterTests
         var nonce = Guid.NewGuid();
         var fields = new Dictionary<string, object?>
         {
-            ["EventName"] = "SourceWarning", ["Dependency"] = "CareerDb", ["Operation"] = "Readiness", ["Method"] = "GET",
-            ["StatusCode"] = 503, ["ElapsedMs"] = 12L, ["AttemptCount"] = 2, ["Synthetic"] = false,
-            ["DiagnosticId"] = nonce.ToString("N"), ["CorrelationId"] = nonce.ToString("D"),
-            ["TraceId"] = "0123456789abcdef0123456789abcdef", ["SpanId"] = "0123456789abcdef",
-            ["ExceptionType"] = "PostgresException", ["IncidentId"] = "0H_SOURCE:0001"
+            ["EventName"] = "SourceWarning",
+            ["Dependency"] = "CareerDb",
+            ["Operation"] = "Readiness",
+            ["Method"] = "GET",
+            ["StatusCode"] = 503,
+            ["ElapsedMs"] = 12L,
+            ["AttemptCount"] = 2,
+            ["Synthetic"] = false,
+            ["DiagnosticId"] = nonce.ToString("N"),
+            ["CorrelationId"] = nonce.ToString("D"),
+            ["TraceId"] = "0123456789abcdef0123456789abcdef",
+            ["SpanId"] = "0123456789abcdef",
+            ["ExceptionType"] = "PostgresException",
+            ["IncidentId"] = "0H_SOURCE:0001"
         };
         using var document = JsonDocument.Parse(Write(LogLevel.Warning, fields));
         var root = document.RootElement;
