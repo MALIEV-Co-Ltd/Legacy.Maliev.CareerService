@@ -142,7 +142,102 @@ public sealed class CareerStartupLoggingTests
         Assert.Contains(factory.Logs.Lines, line => line.Contains("Response has already started", StringComparison.Ordinal));
     }
 
-    private sealed class CareerFactory(string? databaseConnection = null) : WebApplicationFactory<Program>
+    [Fact]
+    public async Task ProductionDiagnostic_DirectLoopbackNonce_ReturnsOriginalEmptyProblemFailure()
+    {
+        using var factory = new CareerFactory(useDiagnosticPeer: true, diagnosticPeer: "127.0.0.1");
+        using var client = factory.CreateClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        const string nonce = "0123456789abcdef0123456789abcdef";
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability?private=" + Sensitive);
+        request.Headers.Add("X-Maliev-Diagnostic-Id", nonce);
+        using var response = await client.SendAsync(request, deadline.Token);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(deadline.Token));
+        Assert.Equal(nonce, Assert.Single(response.Headers.GetValues("X-Maliev-Diagnostic-Id")));
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("noindex", Assert.Single(response.Headers.GetValues("X-Robots-Tag")));
+        Assert.Single(factory.Logs.Lines, line => line.Contains("ObservabilityPipelineProbe", StringComparison.Ordinal));
+        Assert.Contains(factory.Logs.Lines, line => line.Contains("UnhandledRequestFailure", StringComparison.Ordinal));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("GET", "127.0.0.1", null)]
+    [InlineData("GET", "127.0.0.1", "invalid-nonce")]
+    [InlineData("POST", "127.0.0.1", "0123456789abcdef0123456789abcdef")]
+    [InlineData("GET", "203.0.113.17", "0123456789abcdef0123456789abcdef")]
+    [InlineData("GET", null, "0123456789abcdef0123456789abcdef")]
+    public async Task ProductionDiagnostic_InvalidMethodPeerOrNonce_IsPrivate404WithoutSyntheticFailure(
+        string method, string? peer, string? nonce)
+    {
+        using var factory = new CareerFactory(useDiagnosticPeer: true, diagnosticPeer: peer);
+        using var client = factory.CreateClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var request = new HttpRequestMessage(new HttpMethod(method), "/internal/diagnostics/observability");
+        if (nonce is not null)
+        {
+            request.Headers.Add("X-Maliev-Diagnostic-Id", nonce);
+        }
+        using var response = await client.SendAsync(request, deadline.Token);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(deadline.Token));
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("noindex", Assert.Single(response.Headers.GetValues("X-Robots-Tag")));
+        Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        Assert.DoesNotContain(factory.Logs.Lines, line => line.Contains("ObservabilityPipelineProbe", StringComparison.Ordinal)
+            || line.Contains("UnhandledRequestFailure", StringComparison.Ordinal));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ProductionDiagnostic_SecondNonceWithinOneMinute_Is429WithoutSecondSyntheticFailure()
+    {
+        using var factory = new CareerFactory(useDiagnosticPeer: true, diagnosticPeer: "127.0.0.1");
+        using var client = factory.CreateClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability");
+        firstRequest.Headers.Add("X-Maliev-Diagnostic-Id", "0123456789abcdef0123456789abcdef");
+        using var first = await client.SendAsync(firstRequest, deadline.Token);
+        Assert.Equal(HttpStatusCode.InternalServerError, first.StatusCode);
+        Assert.Equal(string.Empty, await first.Content.ReadAsStringAsync(deadline.Token));
+        using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability");
+        secondRequest.Headers.Add("X-Maliev-Diagnostic-Id", "abcdef0123456789abcdef0123456789");
+        using var second = await client.SendAsync(secondRequest, deadline.Token);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+        Assert.Equal(string.Empty, await second.Content.ReadAsStringAsync(deadline.Token));
+        Assert.Equal("no-store", second.Headers.CacheControl?.ToString());
+        Assert.Equal("noindex", Assert.Single(second.Headers.GetValues("X-Robots-Tag")));
+        Assert.False(second.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        Assert.Single(factory.Logs.Lines, line => line.Contains("ObservabilityPipelineProbe", StringComparison.Ordinal));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    private sealed class ControlledDiagnosticPeerStartupFilter(string? peer) : IStartupFilter
+    {
+        public Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> Configure(
+            Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> next)
+        {
+            return app =>
+            {
+                Microsoft.AspNetCore.Builder.UseExtensions.Use(app, async (context, continuation) =>
+                {
+                    context.Connection.RemoteIpAddress = peer is null ? null : IPAddress.Parse(peer);
+                    await continuation(context);
+                });
+                next(app);
+            };
+        }
+    }
+
+    private sealed class CareerFactory(
+        string? databaseConnection = null, bool useDiagnosticPeer = false, string? diagnosticPeer = null)
+        : WebApplicationFactory<Program>
     {
         private readonly RSA _rsa = RSA.Create(2048);
         public Mock<ICareerService> Career { get; } = new(MockBehavior.Strict);
@@ -157,6 +252,10 @@ public sealed class CareerStartupLoggingTests
                 {
                     services.RemoveAll<ICareerService>();
                     services.AddSingleton(Career.Object);
+                }
+                if (useDiagnosticPeer)
+                {
+                    services.AddSingleton<IStartupFilter>(new ControlledDiagnosticPeerStartupFilter(diagnosticPeer));
                 }
                 services.AddControllers().AddApplicationPart(typeof(StartedResponseController).Assembly);
                 services.AddSingleton<ILoggerProvider>(provider =>
