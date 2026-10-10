@@ -36,3 +36,7 @@ Original SQL-host execution is NOT RUN. Preserve Contact main f2c0 and its181
 accepted cases, Career offset draft and gated PR49, Customer/Employee/Web writers,
 all dependency pins and every source receipt. No deployment/data/IAM grant,
 shared tracking changes or stopped financial work is authorized.
+
+## Reviewed producer repair
+
+Actual tests-only head `ec61aaf69549da072c42727b8e2fd0e3cf2a5a87`, run38048185307: strict Release zero warnings/errors;199 executed,193 passed,6 direct null failures,0 skipped. All188 accepted originals and all5 HTTP qualification controls passed. Independent actual runtime review preceded the four early guards in two controllers. Original exact Offer/Level is required strings precede service calls for direct CLR null inputs; HTTP parameter nullability and automatic MVC validation remain unchanged. No reassignment implementation change is needed. All199 tests remain unchanged. Repair-head hosted validation is pending; source SQL-host, deployed IAM/genuine consumer acceptance and whole source closure remain unrun.

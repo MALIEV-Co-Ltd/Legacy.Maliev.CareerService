@@ -22,6 +22,11 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     [ProducesResponseType<JobOfferResponse>(StatusCodes.Status201Created)]
     public async Task<ActionResult> CreateOfferAsync([FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken)
     {
+        if (request is null)
+        {
+            return BadRequest("Offer is required");
+        }
+
         var created = await careerService.CreateOfferAsync(request, cancellationToken);
         return CreatedAtRoute("GetOffer", new { offerId = created.Id }, created);
     }
@@ -96,6 +101,11 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult> UpdateOfferAsync(int offerId, [FromBody] UpsertJobOfferRequest request, CancellationToken cancellationToken)
     {
+        if (request is null)
+        {
+            return BadRequest("Offer is required");
+        }
+
         try { return await careerService.UpdateOfferAsync(offerId, request, cancellationToken) ? NoContent() : NotFound(); }
         catch (CareerConcurrencyException) { return Conflict("The career record changed during this request."); }
     }
