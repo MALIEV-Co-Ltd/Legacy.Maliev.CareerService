@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Legacy.Maliev.CareerService.Api.Logging;
 using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Application.Services;
 using Legacy.Maliev.CareerService.Data;
@@ -25,6 +26,7 @@ static async Task RunHostAsync(string[] startupArgs)
     var builder = WebApplication.CreateBuilder(startupArgs);
 
     builder.AddServiceDefaults();
+    builder.Logging.AddCareerPrivateDiagnostics();
     builder.AddDefaultApiVersioning();
     builder.AddPostgresDbContext<CareerDbContext>(connectionName: "CareerDbContext", configureOptions: (_, options) =>
         // EF's query-failure message embeds exception text/stacks before the formatter can redact it.

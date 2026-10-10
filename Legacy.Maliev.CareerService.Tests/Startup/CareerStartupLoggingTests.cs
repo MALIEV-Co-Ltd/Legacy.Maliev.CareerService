@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Reflection;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,7 +8,7 @@ using System.Text.Json;
 using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Data;
 using Legacy.Maliev.CareerService.Domain;
-using Maliev.Aspire.ServiceDefaults.Logging;
+using Legacy.Maliev.CareerService.Api.Logging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -46,7 +47,7 @@ public sealed class CareerStartupLoggingTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("PostgresException", body);
         using var failure = factory.Failure();
-        Assert.Equal(exceptionType, failure.RootElement.GetProperty("State").GetProperty("ExceptionType").GetString());
+        Assert.Equal(exceptionType, failure.RootElement.GetProperty("ExceptionType").GetString());
         Assert.All(factory.Logs.Lines, line =>
         {
             Assert.DoesNotContain("42P01", line);
@@ -81,25 +82,27 @@ public sealed class CareerStartupLoggingTests
         Assert.Equal("career-acceptance-500", Assert.Single(response.Headers.GetValues("X-Correlation-ID")));
         using var failure = factory.Failure();
         var root = failure.RootElement;
-        var state = root.GetProperty("State");
-        Assert.Equal("Critical", root.GetProperty("LogLevel").GetString());
+        var state = root;
         Assert.Equal("CRITICAL", root.GetProperty("severity").GetString());
-        Assert.Equal("Legacy.Maliev.CareerService.Api", state.GetProperty("Service").GetString());
+        var entryAssembly = Assembly.GetEntryAssembly();
+        Assert.NotNull(entryAssembly);
+        Assert.Equal(entryAssembly.GetName().Name, root.GetProperty("service").GetString());
+        Assert.Equal(entryAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+            root.GetProperty("deploymentVersion").GetString());
         Assert.Equal("GET", state.GetProperty("Method").GetString());
-        Assert.Equal("Jobs/{offerId:int}", state.GetProperty("Path").GetString()?.TrimStart('/'));
+        Assert.False(root.TryGetProperty("Path", out _));
         Assert.Equal(500, state.GetProperty("StatusCode").GetInt32());
         Assert.Equal("Exception", state.GetProperty("ExceptionType").GetString());
         Assert.Equal(document.RootElement.GetProperty("traceId").GetString(), state.GetProperty("IncidentId").GetString());
-        Assert.Equal(TimeSpan.Zero, DateTimeOffset.Parse(state.GetProperty("OccurredAtUtc").GetString()!, CultureInfo.InvariantCulture).Offset);
-        Assert.Equal(TimeSpan.Zero, DateTimeOffset.Parse(root.GetProperty("Timestamp").GetString()!, CultureInfo.InvariantCulture).Offset);
-        Assert.Contains("0123456789abcdef0123456789abcdef", root.GetProperty("Scopes").GetRawText());
-        Assert.Contains("career-acceptance-500", root.GetProperty("Scopes").GetRawText());
+        Assert.Equal(TimeSpan.Zero, DateTimeOffset.Parse(root.GetProperty("occurredAtUtc").GetString()!, CultureInfo.InvariantCulture).Offset);
+        Assert.Equal("0123456789abcdef0123456789abcdef", root.GetProperty("traceId").GetString());
+        Assert.DoesNotContain("career-acceptance-500", failure.RootElement.GetRawText());
         Assert.All(factory.Logs.Lines, line =>
         {
             Assert.DoesNotContain(Sensitive, line);
             Assert.DoesNotContain("817263", line);
         });
-        Assert.Contains(factory.Logs.Lines, line => line.Contains("responded 500", StringComparison.Ordinal));
+        Assert.DoesNotContain(factory.Logs.Lines, line => line.Contains("responded 500", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -118,7 +121,10 @@ public sealed class CareerStartupLoggingTests
         Assert.Contains(providers, name => name.Contains("OpenTelemetryLoggerProvider", StringComparison.Ordinal));
         Assert.DoesNotContain(providers, name => name.Contains("NLog", StringComparison.Ordinal));
         var options = factory.Services.GetRequiredService<IOptionsMonitor<ConsoleLoggerOptions>>();
-        Assert.Equal(MalievCloudJsonConsoleFormatter.FormatterName, options.CurrentValue.FormatterName);
+        Assert.Equal(CareerDiagnosticConsoleFormatter.FormatterName, options.CurrentValue.FormatterName);
+        var filters = factory.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue.Rules;
+        Assert.Contains(filters, rule => rule.ProviderName == typeof(ConsoleLoggerProvider).FullName
+            && rule.CategoryName is null && rule.LogLevel == LogLevel.Warning);
         var tracking = factory.Services.GetRequiredService<IOptions<LoggerFactoryOptions>>().Value.ActivityTrackingOptions;
         Assert.True(tracking.HasFlag(ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId | ActivityTrackingOptions.ParentId));
         using var dependencies = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,
@@ -138,9 +144,16 @@ public sealed class CareerStartupLoggingTests
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("accepted", await response.Content.ReadAsStringAsync());
         using var failure = factory.Failure();
-        Assert.Equal(202, failure.RootElement.GetProperty("State").GetProperty("StatusCode").GetInt32());
+        Assert.Equal(202, failure.RootElement.GetProperty("StatusCode").GetInt32());
         Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
-        Assert.Contains(factory.Logs.Lines, line => line.Contains("Response has already started", StringComparison.Ordinal));
+        Assert.Single(factory.Logs.Lines.Where(line =>
+        {
+            using var warning = JsonDocument.Parse(line);
+            var root = warning.RootElement;
+            return root.GetProperty("severity").GetString() == "WARNING"
+                && root.GetProperty("logger").GetString() == typeof(Maliev.Aspire.ServiceDefaults.Middleware.ExceptionHandlingMiddleware).FullName
+                && root.TryGetProperty("ExceptionType", out var type) && type.GetString() == "Exception";
+        }));
     }
 
     [Fact]
@@ -259,11 +272,11 @@ public sealed class CareerStartupLoggingTests
             Assert.False(response.Headers.Contains("X-Maliev-Health-Instance"));
         }
         var events = ObservationEvents(factory, "HandledOperationFailure");
-        Assert.Equal(new[] { 503, 503, 502 }, events.Select(root => root.GetProperty("State").GetProperty("StatusCode").GetInt32()).ToArray());
+        Assert.Equal(new[] { 503, 503, 502 }, events.Select(root => root.GetProperty("StatusCode").GetInt32()).ToArray());
         Assert.All(events, root =>
         {
-            Assert.Equal("Error", root.GetProperty("LogLevel").GetString());
-            Assert.Equal("HttpResponse", root.GetProperty("State").GetProperty("Operation").GetString());
+            Assert.Equal("ERROR", root.GetProperty("severity").GetString());
+            Assert.Equal("HttpResponse", root.GetProperty("Operation").GetString());
         });
         Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
         Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
@@ -304,9 +317,9 @@ public sealed class CareerStartupLoggingTests
         await ProbeAsync("readiness", 502);
         var events = ObservationEvents(factory, "HealthProbeFailure");
         Assert.Equal(new[] { "Readiness", "Liveness", "Readiness", "Liveness", "Readiness", "Readiness" },
-            events.Select(root => root.GetProperty("State").GetProperty("Operation").GetString()).ToArray());
+            events.Select(root => root.GetProperty("Operation").GetString()).ToArray());
         Assert.Equal(new[] { 503, 503, 503, 503, 502, 502 },
-            events.Select(root => root.GetProperty("State").GetProperty("StatusCode").GetInt32()).ToArray());
+            events.Select(root => root.GetProperty("StatusCode").GetInt32()).ToArray());
         Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
         Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
         Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
@@ -336,8 +349,8 @@ public sealed class CareerStartupLoggingTests
         Assert.Equal(2, events.Length);
         Assert.All(events, root =>
         {
-            Assert.Equal("Readiness", root.GetProperty("State").GetProperty("Operation").GetString());
-            Assert.Equal(503, root.GetProperty("State").GetProperty("StatusCode").GetInt32());
+            Assert.Equal("Readiness", root.GetProperty("Operation").GetString());
+            Assert.Equal(503, root.GetProperty("StatusCode").GetInt32());
         });
         Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
         Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
@@ -399,6 +412,44 @@ public sealed class CareerStartupLoggingTests
         return instance;
     }
 
+    [Fact]
+    public void ProductionPrivateFormatter_UsesConfiguredFormatterAndDropsArbitraryFields()
+    {
+        const string messageSentinel = "formatter-message@example.invalid";
+        const string stateSentinel = "formatter-state@example.invalid";
+        const string scopeSentinel = "formatter-scope@example.invalid";
+        using var factory = new CareerFactory();
+        var logger = factory.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Career.PrivateFormatterSourceObligation");
+        using var scope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["CustomerEmail"] = scopeSentinel,
+            ["Operation"] = "SourceWarningProbe"
+        });
+        logger.Log(LogLevel.Warning, new EventId(1901, "SourceWarningProbe"),
+            new Dictionary<string, object?>
+            {
+                ["EventName"] = "SourceWarningProbe",
+                ["Operation"] = "SourceWarningProbe",
+                ["CustomerEmail"] = stateSentinel,
+                ["StatusCode"] = 503
+            }, new InvalidOperationException("formatter-exception@example.invalid"), (_, _) => messageSentinel);
+        var line = Assert.Single(factory.Logs.Lines.Where(value =>
+            value.Contains("SourceWarningProbe", StringComparison.Ordinal)));
+        using var identity = JsonDocument.Parse(line);
+        Assert.Equal(1901, identity.RootElement.GetProperty("eventId").GetInt32());
+        Assert.DoesNotContain(messageSentinel, line, StringComparison.Ordinal);
+        Assert.DoesNotContain(stateSentinel, line, StringComparison.Ordinal);
+        Assert.DoesNotContain(scopeSentinel, line, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+        Assert.Equal("WARNING", root.GetProperty("severity").GetString());
+        Assert.Equal("SourceWarningProbe", root.GetProperty("EventName").GetString());
+        Assert.Equal(503, root.GetProperty("StatusCode").GetInt32());
+        Assert.False(root.TryGetProperty("CustomerEmail", out _));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
     private static JsonElement[] ObservationEvents(CareerFactory factory, string eventName)
     {
         var events = new List<JsonElement>();
@@ -406,8 +457,7 @@ public sealed class CareerStartupLoggingTests
         {
             using var document = JsonDocument.Parse(line);
             var root = document.RootElement;
-            if (root.TryGetProperty("State", out var state) && state.ValueKind == JsonValueKind.Object
-                && state.TryGetProperty("EventName", out var name) && name.GetString() == eventName)
+            if (root.TryGetProperty("EventName", out var name) && name.GetString() == eventName)
             {
                 events.Add(root.Clone());
             }
@@ -468,7 +518,8 @@ public sealed class CareerStartupLoggingTests
                 services.AddControllers().AddApplicationPart(typeof(StartedResponseController).Assembly);
                 services.AddSingleton<ILoggerProvider>(provider =>
                 {
-                    Logs.Formatter = new MalievCloudJsonConsoleFormatter(provider.GetRequiredService<IOptionsMonitor<JsonConsoleFormatterOptions>>());
+                    Logs.Formatter = provider.GetServices<ConsoleFormatter>().Single(formatter =>
+                        formatter.Name == provider.GetRequiredService<IOptionsMonitor<ConsoleLoggerOptions>>().CurrentValue.FormatterName);
                     return Logs;
                 });
             });
@@ -503,7 +554,7 @@ public sealed class CareerStartupLoggingTests
     {
         private IExternalScopeProvider _scopes = new LoggerExternalScopeProvider();
         public ConcurrentQueue<string> Lines { get; } = new();
-        public MalievCloudJsonConsoleFormatter Formatter { get; set; } = null!;
+        public ConsoleFormatter Formatter { get; set; } = null!;
         public ILogger CreateLogger(string categoryName) => new CaptureLogger(this, categoryName);
         public void SetScopeProvider(IExternalScopeProvider scopeProvider) => _scopes = scopeProvider;
         public void Dispose() { }
@@ -516,7 +567,7 @@ public sealed class CareerStartupLoggingTests
             {
                 using var writer = new StringWriter(CultureInfo.InvariantCulture);
                 provider.Formatter.Write(new LogEntry<TState>(level, category, eventId, state, exception, formatter), provider._scopes, writer);
-                provider.Lines.Enqueue(writer.ToString());
+                if (writer.GetStringBuilder().Length != 0) provider.Lines.Enqueue(writer.ToString());
             }
         }
     }
