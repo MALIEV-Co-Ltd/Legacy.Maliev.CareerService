@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
@@ -218,6 +219,202 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("/Jobs")]
+    [InlineData("/jobs")]
+    public async Task ProductionCompletedObservation_RegisteredHealthHeadersAreStablePerHostAndCaseInsensitive(string prefix)
+    {
+        using var factory = new CareerFactory(completedObservation: new CompletedObservationFixture());
+        using var client = factory.CreateClient();
+        using var liveness = await ObservedRequestAsync(client, prefix + "/liveness");
+        using var readiness = await ObservedRequestAsync(client, prefix + "/readiness");
+        Assert.Equal(HttpStatusCode.OK, liveness.StatusCode);
+        Assert.Equal("Healthy", await liveness.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, readiness.StatusCode);
+        var instance = AssertHealthInstance(liveness);
+        Assert.Equal(instance, AssertHealthInstance(readiness));
+        using var other = new CareerFactory(completedObservation: new CompletedObservationFixture());
+        using var otherClient = other.CreateClient();
+        using var otherLiveness = await ObservedRequestAsync(otherClient, prefix + "/liveness");
+        Assert.Equal(HttpStatusCode.OK, otherLiveness.StatusCode);
+        Assert.NotEqual(instance, AssertHealthInstance(otherLiveness));
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        factory.Career.VerifyNoOtherCalls();
+        other.Career.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ProductionCompletedObservation_Handled5xxRecordsEveryResponseWithoutSensitiveValues()
+    {
+        var fixture = new CompletedObservationFixture();
+        using var factory = new CareerFactory(completedObservation: fixture);
+        using var client = factory.CreateClient();
+        foreach (var status in new[] { 503, 503, 200, 400, 502 })
+        {
+            fixture.ResponseStatus = status;
+            using var response = await ObservedRequestAsync(client, $"/Jobs/acceptance-observation/handled/{Sensitive}?search={Sensitive}");
+            Assert.Equal((HttpStatusCode)status, response.StatusCode);
+            Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+            Assert.False(response.Headers.Contains("X-Maliev-Health-Instance"));
+        }
+        var events = ObservationEvents(factory, "HandledOperationFailure");
+        Assert.Equal(new[] { 503, 503, 502 }, events.Select(root => root.GetProperty("State").GetProperty("StatusCode").GetInt32()).ToArray());
+        Assert.All(events, root =>
+        {
+            Assert.Equal("Error", root.GetProperty("LogLevel").GetString());
+            Assert.Equal("HttpResponse", root.GetProperty("State").GetProperty("Operation").GetString());
+        });
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ProductionCompletedObservation_HealthSuffixBucketsThrottleAtFiveMinutesAndResetOnRecovery()
+    {
+        var fixture = new CompletedObservationFixture();
+        using var factory = new CareerFactory(completedObservation: fixture);
+        using var client = factory.CreateClient();
+        async Task ProbeAsync(string operation, int status)
+        {
+            fixture.ResponseStatus = status;
+            using var response = await ObservedRequestAsync(client, $"/Jobs/acceptance-observation/{operation}?search={Sensitive}");
+            Assert.Equal((HttpStatusCode)status, response.StatusCode);
+            Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+            // Suffix classification is distinct from the registered-health header policy.
+            Assert.False(response.Headers.Contains("X-Maliev-Health-Instance"));
+        }
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("liveness", 503);
+        Assert.Equal(2, ObservationEvents(factory, "HealthProbeFailure").Length);
+        fixture.Advance(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(1));
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("liveness", 503);
+        Assert.Equal(2, ObservationEvents(factory, "HealthProbeFailure").Length);
+        fixture.Advance(TimeSpan.FromSeconds(1));
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("liveness", 503);
+        Assert.Equal(4, ObservationEvents(factory, "HealthProbeFailure").Length);
+        await ProbeAsync("readiness", 502);
+        Assert.Equal(5, ObservationEvents(factory, "HealthProbeFailure").Length);
+        await ProbeAsync("readiness", 200);
+        await ProbeAsync("readiness", 502);
+        var events = ObservationEvents(factory, "HealthProbeFailure");
+        Assert.Equal(new[] { "Readiness", "Liveness", "Readiness", "Liveness", "Readiness", "Readiness" },
+            events.Select(root => root.GetProperty("State").GetProperty("Operation").GetString()).ToArray());
+        Assert.Equal(new[] { 503, 503, 503, 503, 502, 502 },
+            events.Select(root => root.GetProperty("State").GetProperty("StatusCode").GetInt32()).ToArray());
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ProductionCompletedObservation_RegisteredReadinessFailureRecoversWithoutChangingInstance()
+    {
+        var fixture = new CompletedObservationFixture();
+        using var factory = new CareerFactory(completedObservation: fixture);
+        using var client = factory.CreateClient();
+        string? instance = null;
+        foreach (var healthy in new[] { true, false, false, true, false })
+        {
+            fixture.ReadinessHealthy = healthy;
+            using var response = await ObservedRequestAsync(client, $"/Jobs/readiness?search={Sensitive}");
+            Assert.Equal(healthy ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            var actualInstance = AssertHealthInstance(response);
+            instance ??= actualInstance;
+            Assert.Equal(instance, actualInstance);
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(healthy ? "Healthy" : "Unhealthy", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        }
+        var events = ObservationEvents(factory, "HealthProbeFailure");
+        Assert.Equal(2, events.Length);
+        Assert.All(events, root =>
+        {
+            Assert.Equal("Readiness", root.GetProperty("State").GetProperty("Operation").GetString());
+            Assert.Equal(503, root.GetProperty("State").GetProperty("StatusCode").GetInt32());
+        });
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("GET", "/Other/liveness", 404)]
+    [InlineData("GET", "/Jobs/aspire-liveness", 200)]
+    [InlineData("POST", "/Jobs/liveness", 405)]
+    [InlineData("GET", "/Jobs/acceptance-observation/readiness", 200)]
+    public async Task ProductionCompletedObservation_UnregisteredOrNonGetHealthHasNoInstanceHeader(string method, string path, int status)
+    {
+        using var factory = new CareerFactory(completedObservation: new CompletedObservationFixture { ResponseStatus = 200 });
+        using var client = factory.CreateClient();
+        using var response = await ObservedRequestAsync(client, path, new HttpMethod(method));
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.False(response.Headers.Contains("X-Maliev-Health-Instance"));
+        Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ProductionCompletedObservation_ThrownBusinessFailureHasOneOuterIncidentAndNoCompletedDuplicate()
+    {
+        using var factory = new CareerFactory(completedObservation: new CompletedObservationFixture());
+        factory.Career.Setup(service => service.GetOfferByIdAsync(817263, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception(Sensitive));
+        using var client = factory.CreateClient();
+        using var response = await ObservedRequestAsync(client, $"/Jobs/817263?search={Sensitive}");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("An internal server error occurred", document.RootElement.GetProperty("error").GetString());
+        Assert.Single(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.Verify(service => service.GetOfferByIdAsync(817263, It.IsAny<CancellationToken>()), Times.Once);
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    private static async Task<HttpResponseMessage> ObservedRequestAsync(HttpClient client, string path, HttpMethod? method = null)
+    {
+        using var request = new HttpRequestMessage(method ?? HttpMethod.Get, path);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        return await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, deadline.Token);
+    }
+
+    private static string AssertHealthInstance(HttpResponseMessage response)
+    {
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var instance = Assert.Single(response.Headers.GetValues("X-Maliev-Health-Instance"));
+        Assert.True(Guid.TryParseExact(instance, "N", out _));
+        Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        return instance;
+    }
+
+    private static JsonElement[] ObservationEvents(CareerFactory factory, string eventName)
+    {
+        var events = new List<JsonElement>();
+        foreach (var line in factory.Logs.Lines)
+        {
+            using var document = JsonDocument.Parse(line);
+            var root = document.RootElement;
+            if (root.TryGetProperty("State", out var state) && state.ValueKind == JsonValueKind.Object
+                && state.TryGetProperty("EventName", out var name) && name.GetString() == eventName)
+            {
+                events.Add(root.Clone());
+            }
+        }
+        return events.ToArray();
+    }
+
     private sealed class ControlledDiagnosticPeerStartupFilter(string? peer) : IStartupFilter
     {
         public Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> Configure(
@@ -236,7 +433,8 @@ public sealed class CareerStartupLoggingTests
     }
 
     private sealed class CareerFactory(
-        string? databaseConnection = null, bool useDiagnosticPeer = false, string? diagnosticPeer = null)
+        string? databaseConnection = null, bool useDiagnosticPeer = false, string? diagnosticPeer = null,
+        CompletedObservationFixture? completedObservation = null)
         : WebApplicationFactory<Program>
     {
         private readonly RSA _rsa = RSA.Create(2048);
@@ -256,6 +454,16 @@ public sealed class CareerStartupLoggingTests
                 if (useDiagnosticPeer)
                 {
                     services.AddSingleton<IStartupFilter>(new ControlledDiagnosticPeerStartupFilter(diagnosticPeer));
+                }
+                if (completedObservation is { } observation)
+                {
+                    services.RemoveAll<TimeProvider>();
+                    services.AddSingleton<TimeProvider>(observation);
+                    services.AddSingleton(observation);
+                    // Controlled health results only; this does not prove real dependency readiness.
+                    services.Configure<HealthCheckServiceOptions>(options => options.Registrations.Clear());
+                    services.AddHealthChecks().AddCheck("controlled-observation", () =>
+                        observation.ReadinessHealthy ? HealthCheckResult.Healthy() : HealthCheckResult.Unhealthy("controlled"));
                 }
                 services.AddControllers().AddApplicationPart(typeof(StartedResponseController).Assembly);
                 services.AddSingleton<ILoggerProvider>(provider =>
@@ -325,6 +533,15 @@ public sealed class StartedResponseController : ControllerBase
         await database.SaveChangesAsync();
     }
 
+    [HttpGet("Jobs/acceptance-observation/handled/{value}")]
+    [HttpGet("Jobs/acceptance-observation/readiness")]
+    [HttpGet("Jobs/acceptance-observation/liveness")]
+    public async Task CompleteObservationAsync([FromServices] CompletedObservationFixture fixture)
+    {
+        Response.StatusCode = fixture.ResponseStatus;
+        await Response.StartAsync();
+    }
+
     [HttpGet("Jobs/acceptance-started/{value}")]
     public async Task GetAsync()
     {
@@ -333,4 +550,14 @@ public sealed class StartedResponseController : ControllerBase
         await Response.Body.FlushAsync();
         throw new Exception("candidate-private@example.invalid");
     }
+}
+
+// Test-owned clock and health-result control; no timer, worker, connection or production selector.
+public sealed class CompletedObservationFixture : TimeProvider
+{
+    private DateTimeOffset _now = new(2026, 10, 10, 0, 0, 0, TimeSpan.Zero);
+    public int ResponseStatus { get; set; } = 503;
+    public bool ReadinessHealthy { get; set; } = true;
+    public override DateTimeOffset GetUtcNow() => _now;
+    public void Advance(TimeSpan duration) => _now += duration;
 }
