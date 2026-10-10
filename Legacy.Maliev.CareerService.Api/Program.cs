@@ -35,6 +35,7 @@ static async Task RunHostAsync(string[] startupArgs)
     builder.AddStandardCors();
     builder.AddJwtAuthentication();
     builder.AddStandardMiddleware(options => options.EnableRequestLogging = true);
+    builder.AddPrivateRequestObservation("Jobs");
     builder.AddStandardOpenApi(
         title: "Legacy MALIEV JobOffer Service API",
         description: "Temporary .NET 10 compatibility service preserving the legacy Jobs and jobs/Levels API contracts.");
