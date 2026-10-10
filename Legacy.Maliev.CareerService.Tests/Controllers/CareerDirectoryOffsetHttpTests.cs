@@ -36,22 +36,32 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         {
             var level = new JobLevel
             {
-                Name = "วิศวกร", Description = "Synthetic shared level",
-                CreatedDate = new DateTime(2020, 1, 1), ModifiedDate = new DateTime(2020, 1, 2),
+                Name = "วิศวกร",
+                Description = "Synthetic shared level",
+                CreatedDate = new DateTime(2020, 1, 1),
+                ModifiedDate = new DateTime(2020, 1, 2),
             };
             var matches = Enumerable.Range(0, 5).Select(value => new JobOffer
             {
-                Level = level, Title = $"Boundary vacancy {value}", Introduction = "Synthetic introduction",
-                Description = "Synthetic description", Prerequisites = "Synthetic prerequisites",
-                WhatWeOffer = "Synthetic offer", Location = "ประเทศไทย", IsFilled = false,
+                Level = level,
+                Title = $"Boundary vacancy {value}",
+                Introduction = "Synthetic introduction",
+                Description = "Synthetic description",
+                Prerequisites = "Synthetic prerequisites",
+                WhatWeOffer = "Synthetic offer",
+                Location = "ประเทศไทย",
+                IsFilled = false,
                 CreatedDate = new DateTime(2020, 2, 1).AddMinutes(value),
                 ModifiedDate = new DateTime(2020, 2, 2).AddMinutes(value),
             }).ToArray();
             db.Offers.AddRange(matches);
             db.Offers.Add(new JobOffer
             {
-                Level = level, Title = "Other vacancy", Description = "Unrelated synthetic row",
-                IsFilled = true, CreatedDate = new DateTime(2020, 3, 1),
+                Level = level,
+                Title = "Other vacancy",
+                Description = "Unrelated synthetic row",
+                IsFilled = true,
+                CreatedDate = new DateTime(2020, 3, 1),
             });
             await db.SaveChangesAsync(cancellation);
             matchingIds = matches.Select(row => row.Id).Order().ToArray();
@@ -124,12 +134,25 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         {
             Offers = await db.Offers.AsNoTracking().OrderBy(row => row.Id).Select(row => new
             {
-                row.Id, row.LevelId, row.Title, row.Introduction, row.Description, row.Prerequisites,
-                row.WhatWeOffer, row.Location, row.IsFilled, row.CreatedDate, row.ModifiedDate,
+                row.Id,
+                row.LevelId,
+                row.Title,
+                row.Introduction,
+                row.Description,
+                row.Prerequisites,
+                row.WhatWeOffer,
+                row.Location,
+                row.IsFilled,
+                row.CreatedDate,
+                row.ModifiedDate,
             }).ToArrayAsync(cancellation),
             Levels = await db.Levels.AsNoTracking().OrderBy(row => row.Id).Select(row => new
             {
-                row.Id, row.Name, row.Description, row.CreatedDate, row.ModifiedDate,
+                row.Id,
+                row.Name,
+                row.Description,
+                row.CreatedDate,
+                row.ModifiedDate,
             }).ToArrayAsync(cancellation),
             OfferRevisions = await db.Database.SqlQueryRaw<string>(
                 "SELECT \"ID\"::text || ':' || xmin::text AS \"Value\" FROM \"Offer\" ORDER BY \"ID\"").ToArrayAsync(cancellation),

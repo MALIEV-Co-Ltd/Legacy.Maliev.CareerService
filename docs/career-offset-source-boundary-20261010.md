@@ -11,3 +11,7 @@ After independent actual RED review, consider only Int64 offset, filtered-count 
 ## Reviewed producer repair
 
 Actual tests-only head `fd53f9e6178b1efbc3b93bc8d1b8d13d67503936` runtime failures after a strict Release build were independently reviewed before this repair. Offset now computes in Int64 and returns existing empty-page metadata when it exhausts the filtered Int32 count, before narrowing for SQL Skip. All213 tests and all other production/auth/dependency/workflow bytes remain unchanged. This corrects the inherited unchecked arithmetic bug; exact repair-head full/focused/raw/static evidence and protected post-main CI remain required. Original source SQL/genuine IAM/consumer and whole source closure remain unqualified.
+
+## Hosted formatting correction
+
+Initial repair head `892fe12dc40cfa2ed60c5a3c03e6c951999b93f5` passed strict Release and all213 tests but failed formatting on the frozen new offset test. Only actual diagnosed whitespace is corrected; every test token and assertion is preserved. Production repair and all199 original tests remain byte-identical. Exact corrected-head full/static validation remains required.
