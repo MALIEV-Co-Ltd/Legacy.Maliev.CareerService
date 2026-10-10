@@ -319,6 +319,247 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(1, await db.Levels.CountAsync());
     }
 
+    [Fact]
+    public async Task Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor()
+    {
+        await fixture.ResetAsync();
+        JobLevel oldLevel;
+        JobLevel nextLevel;
+        JobOffer selected;
+        JobOffer survivor;
+        await using (var db = fixture.Context())
+        {
+            oldLevel = Level("  ระดับเดิม  ");
+            nextLevel = Level("  ระดับใหม่  ");
+            db.Levels.AddRange(oldLevel, nextLevel);
+            await db.SaveChangesAsync();
+            selected = Offer("Selected", oldLevel.Id);
+            survivor = Offer("Survivor", oldLevel.Id);
+            db.Offers.AddRange(selected, survivor);
+            await db.SaveChangesAsync();
+        }
+        Assert.NotEqual(oldLevel.Id, nextLevel.Id);
+        var beforeLevels = await LevelStateAsync();
+        var beforeSurvivor = await OfferStateAsync(survivor.Id);
+        uint beforeVersion;
+        await using (var db = fixture.Context())
+        {
+            beforeVersion = await db.Offers.AsNoTracking().Where(offer => offer.Id == selected.Id)
+                .Select(offer => EF.Property<uint>(offer, "Version")).SingleAsync();
+        }
+        using var anonymous = fixture.Client();
+        using (var before = await anonymous.GetAsync($"/Jobs/{selected.Id}"))
+        {
+            Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+            using var json = JsonDocument.Parse(await before.Content.ReadAsStringAsync());
+            Assert.Equal(oldLevel.Id, json.RootElement.GetProperty("levelId").GetInt32());
+            Assert.Equal(oldLevel.Id, json.RootElement.GetProperty("level").GetProperty("id").GetInt32());
+        }
+        using var writer = fixture.Client("legacy-career.jobs.update");
+        using (var updated = await writer.PutAsJsonAsync($"/Jobs/{selected.Id}", new
+        {
+            LevelId = nextLevel.Id,
+            Title = "  วิศวกรปรับระดับ  ",
+            Description = "Updated description",
+            Prerequisites = "Updated prerequisites",
+            IsFilled = false,
+            Id = survivor.Id,
+            CreatedDate = new DateTime(1980, 1, 1),
+            Introduction = "Forged introduction",
+            WhatWeOffer = "Forged benefits",
+            Location = "Forged location",
+            Level = new { Id = oldLevel.Id, Name = "Forged principal", Description = "Forged description" }
+        }))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
+            Assert.Equal(string.Empty, await updated.Content.ReadAsStringAsync());
+        }
+        await using (var db = fixture.Context())
+        {
+            var actual = await db.Offers.AsNoTracking().SingleAsync(offer => offer.Id == selected.Id);
+            Assert.Equal(nextLevel.Id, actual.LevelId);
+            Assert.Equal("  วิศวกรปรับระดับ  ", actual.Title);
+            Assert.Equal("Updated description", actual.Description);
+            Assert.Equal("Updated prerequisites", actual.Prerequisites);
+            Assert.False(actual.IsFilled);
+            Assert.Equal(selected.CreatedDate, actual.CreatedDate);
+            Assert.True(actual.ModifiedDate > selected.ModifiedDate);
+            Assert.Equal(selected.Introduction, actual.Introduction);
+            Assert.Equal(selected.WhatWeOffer, actual.WhatWeOffer);
+            Assert.Equal(selected.Location, actual.Location);
+            var version = await db.Offers.AsNoTracking().Where(offer => offer.Id == selected.Id)
+                .Select(offer => EF.Property<uint>(offer, "Version")).SingleAsync();
+            Assert.NotEqual(beforeVersion, version);
+            Assert.Equal(2, await db.Offers.CountAsync());
+            Assert.Equal(2, await db.Levels.CountAsync());
+        }
+        Assert.Equal(beforeLevels, await LevelStateAsync());
+        Assert.Equal(beforeSurvivor, await OfferStateAsync(survivor.Id));
+        var committed = await OfferStateAsync(selected.Id);
+        foreach (var route in new[] { $"/Jobs/{selected.Id}", $"/jobs/{selected.Id}/" })
+        {
+            using var response = await anonymous.GetAsync(route);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            AssertSelected(json.RootElement, selected.Id, nextLevel);
+        }
+        using (var response = await anonymous.GetAsync("/jobs/"))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(2, json.RootElement.GetProperty("totalItems").GetInt32());
+            var items = json.RootElement.GetProperty("items").EnumerateArray().ToArray();
+            Assert.Equal(new[] { selected.Id, survivor.Id }.OrderBy(id => id).ToArray(),
+                items.Select(item => item.GetProperty("id").GetInt32()).ToArray());
+            AssertSelected(Assert.Single(items, item => item.GetProperty("id").GetInt32() == selected.Id), selected.Id, nextLevel);
+            var surviving = Assert.Single(items, item => item.GetProperty("id").GetInt32() == survivor.Id);
+            Assert.Equal(oldLevel.Id, surviving.GetProperty("levelId").GetInt32());
+            Assert.Equal(oldLevel.Name, surviving.GetProperty("level").GetProperty("name").GetString());
+        }
+        Assert.Equal("true", await anonymous.GetStringAsync("/jobs/job-opening-status/"));
+        Assert.Equal(committed, await OfferStateAsync(selected.Id));
+        Assert.Equal(beforeSurvivor, await OfferStateAsync(survivor.Id));
+        Assert.Equal(beforeLevels, await LevelStateAsync());
+    }
+
+    private static JobLevel Level(string name) => new()
+    {
+        Name = name,
+        Description = "Persisted principal",
+        CreatedDate = new DateTime(2020, 1, 1),
+        ModifiedDate = new DateTime(2020, 1, 2)
+    };
+
+    private static JobOffer Offer(string title, int levelId) => new()
+    {
+        LevelId = levelId,
+        Title = title,
+        Description = "Original description",
+        Prerequisites = "Original prerequisites",
+        Introduction = "Imported introduction",
+        WhatWeOffer = "Imported benefits",
+        Location = "Imported location",
+        IsFilled = true,
+        CreatedDate = new DateTime(2020, 1, 1),
+        ModifiedDate = new DateTime(2020, 1, 2)
+    };
+
+    private static void AssertSelected(JsonElement item, int id, JobLevel level)
+    {
+        Assert.Equal(id, item.GetProperty("id").GetInt32());
+        Assert.Equal(level.Id, item.GetProperty("levelId").GetInt32());
+        Assert.Equal("  วิศวกรปรับระดับ  ", item.GetProperty("title").GetString());
+        Assert.Equal(level.Id, item.GetProperty("level").GetProperty("id").GetInt32());
+        Assert.Equal(level.Name, item.GetProperty("level").GetProperty("name").GetString());
+        Assert.False(item.GetProperty("level").TryGetProperty("offers", out _));
+    }
+
+    private async Task<string> OfferStateAsync(int id)
+    {
+        await using var db = fixture.Context();
+        return JsonSerializer.Serialize(await db.Offers.AsNoTracking().Where(offer => offer.Id == id)
+            .Select(offer => new { Row = offer, Version = EF.Property<uint>(offer, "Version") }).SingleAsync());
+    }
+
+    private async Task<string> LevelStateAsync()
+    {
+        await using var db = fixture.Context();
+        return JsonSerializer.Serialize(await db.Levels.AsNoTracking().OrderBy(level => level.Id)
+            .Select(level => new { Row = level, Version = EF.Property<uint>(level, "Version") }).ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NullUpdateBody_IsBadRequestBeforeExistingOrMissingLookupAndPreservesPhysicalGraph(bool missing)
+    {
+        await fixture.ResetAsync();
+        int id;
+        await using (var db = fixture.Context())
+        {
+            var selected = new JobOffer
+            {
+                Level = new JobLevel { Name = "  ระดับเดิม  ", Description = "Persisted principal" },
+                Title = "  วิศวกร  ",
+                Description = "Persisted description",
+                Prerequisites = "Persisted prerequisites",
+                Introduction = "Imported introduction",
+                WhatWeOffer = "Imported benefits",
+                Location = "Imported location",
+                IsFilled = false,
+                CreatedDate = new DateTime(2020, 1, 1),
+                ModifiedDate = new DateTime(2020, 1, 2)
+            };
+            var survivor = new JobOffer
+            {
+                Level = new JobLevel { Name = "Survivor level", Description = "Unrelated principal" },
+                Title = "Survivor",
+                IsFilled = true
+            };
+            db.Offers.AddRange(selected, survivor);
+            await db.SaveChangesAsync();
+            id = missing ? int.MaxValue : selected.Id;
+            Assert.NotEqual(int.MaxValue, selected.Id);
+            Assert.NotEqual(selected.Id, survivor.Id);
+            Assert.NotEqual(selected.LevelId, survivor.LevelId);
+            Assert.Equal(2, await db.Offers.CountAsync());
+            Assert.Equal(2, await db.Levels.CountAsync());
+        }
+        var before = await PhysicalStateAsync();
+        using var writer = fixture.Client("legacy-career.jobs.update");
+        foreach (var route in new[] { $"/Jobs/{id}", $"/jobs/{id}/" })
+        {
+            using var response = await writer.PutAsync(route, new StringContent("null", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(before, await PhysicalStateAsync());
+        }
+        using var anonymous = fixture.Client();
+        Assert.Equal("true", await anonymous.GetStringAsync("/jobs/job-opening-status/"));
+        Assert.Equal(before, await PhysicalStateAsync());
+    }
+
+    private async Task<string> PhysicalStateAsync()
+    {
+        await using var db = fixture.Context();
+        var offers = await db.Offers.AsNoTracking().OrderBy(offer => offer.Id)
+            .Select(offer => new { Row = offer, Version = EF.Property<uint>(offer, "Version") }).ToArrayAsync();
+        var levels = await db.Levels.AsNoTracking().OrderBy(level => level.Id)
+            .Select(level => new { Row = level, Version = EF.Property<uint>(level, "Version") }).ToArrayAsync();
+        return JsonSerializer.Serialize(new { Offers = offers, Levels = levels });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LevelNullUpdateBody_PreservesAutomaticValidationAndPhysicalOfferLevelGraph(bool missing)
+    {
+        await fixture.ResetAsync();
+        int levelId;
+        await using (var db = fixture.Context())
+        {
+            var selected = new JobLevel { Name = "Synthetic selected", Description = "Retained selected" };
+            var survivor = new JobLevel { Name = "Synthetic survivor", Description = "Retained survivor" };
+            db.Levels.AddRange(selected, survivor);
+            db.Offers.Add(new JobOffer { Level = selected, Title = "Synthetic linked offer", IsFilled = false });
+            await db.SaveChangesAsync();
+            levelId = missing ? int.MaxValue : selected.Id;
+            Assert.NotEqual(int.MaxValue, selected.Id);
+        }
+
+        var before = await PhysicalStateAsync();
+        using var writer = fixture.Client("legacy-career.levels.update");
+        foreach (var route in new[] { $"/jobs/Levels/{levelId}", $"/jobs/levels/{levelId}/" })
+        {
+            using var response = await writer.PutAsync(route, new StringContent("null", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(400, json.RootElement.GetProperty("status").GetInt32());
+            Assert.Equal(JsonValueKind.Object, json.RootElement.GetProperty("errors").ValueKind);
+            Assert.Equal(before, await PhysicalStateAsync());
+        }
+    }
+
     private static void SetSearchField(JobOffer offer, string field, string value)
     {
         switch (field)

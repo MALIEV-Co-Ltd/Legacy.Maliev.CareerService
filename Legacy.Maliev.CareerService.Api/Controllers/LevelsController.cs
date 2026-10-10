@@ -23,6 +23,11 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     [ProducesResponseType<LevelResponse>(StatusCodes.Status201Created)]
     public async Task<ActionResult> CreateLevelAsync([FromBody] UpsertJobLevelRequest request, CancellationToken cancellationToken)
     {
+        if (request is null)
+        {
+            return BadRequest("Level is required");
+        }
+
         var created = await careerService.CreateLevelAsync(request, cancellationToken);
         return CreatedAtRoute("GetLevel", new { levelId = created.Id }, ToResponse(created));
     }
@@ -80,6 +85,11 @@ public sealed class LevelsController(ICareerService careerService) : ControllerB
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult> UpdateLevelAsync(int levelId, [FromBody] UpsertJobLevelRequest request, CancellationToken cancellationToken)
     {
+        if (request is null)
+        {
+            return BadRequest("Level is required");
+        }
+
         try { return await careerService.UpdateLevelAsync(levelId, request, cancellationToken) ? NoContent() : NotFound(); }
         catch (CareerConcurrencyException) { return Conflict("The career record changed during this request."); }
     }
