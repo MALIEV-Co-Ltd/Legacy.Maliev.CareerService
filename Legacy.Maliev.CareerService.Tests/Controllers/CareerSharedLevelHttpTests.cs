@@ -209,11 +209,11 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         using var levelsJson = JsonDocument.Parse(await levels.Content.ReadAsStringAsync());
         var level = Assert.Single(levelsJson.RootElement.EnumerateArray());
         Assert.Equal(levelId, level.GetProperty("id").GetInt32());
-        AssertLevelFields(level, name, description);
+        AssertLevelFields(level, name, description, direct: true);
         using var detail = await reader.GetAsync($"/jobs/levels/{levelId}/");
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         using var detailJson = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
-        AssertLevelFields(detailJson.RootElement, name, description);
+        AssertLevelFields(detailJson.RootElement, name, description, direct: true);
         using var listing = await reader.GetAsync("/jobs/?index=1&size=10");
         Assert.Equal(HttpStatusCode.OK, listing.StatusCode);
         using var listingJson = JsonDocument.Parse(await listing.Content.ReadAsStringAsync());
@@ -350,13 +350,19 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         });
     }
 
-    private static void AssertLevelFields(JsonElement level, string? name, string? description)
+    private static void AssertLevelFields(JsonElement level, string? name, string? description, bool direct = false)
     {
         if (name is null) Assert.False(level.TryGetProperty("name", out _));
         else Assert.Equal(name, level.GetProperty("name").GetString());
         if (description is null) Assert.False(level.TryGetProperty("description", out _));
         else Assert.Equal(description, level.GetProperty("description").GetString());
         Assert.False(level.TryGetProperty("Name", out _));
-        Assert.False(level.TryGetProperty("offers", out _));
+        if (direct)
+        {
+            var offers = level.GetProperty("offers");
+            Assert.Equal(JsonValueKind.Array, offers.ValueKind);
+            Assert.Equal(0, offers.GetArrayLength());
+        }
+        else Assert.False(level.TryGetProperty("offers", out _));
     }
 }
