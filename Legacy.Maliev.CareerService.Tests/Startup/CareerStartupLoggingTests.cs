@@ -146,14 +146,14 @@ public sealed class CareerStartupLoggingTests
         using var failure = factory.Failure();
         Assert.Equal(202, failure.RootElement.GetProperty("StatusCode").GetInt32());
         Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
-        Assert.Single(factory.Logs.Lines.Where(line =>
+        Assert.Single(factory.Logs.Lines, line =>
         {
             using var warning = JsonDocument.Parse(line);
             var root = warning.RootElement;
             return root.GetProperty("severity").GetString() == "WARNING"
-                && root.GetProperty("logger").GetString() == typeof(Maliev.Aspire.ServiceDefaults.Middleware.ExceptionHandlingMiddleware).FullName
+                && root.GetProperty("logger").GetString() == typeof(global::Maliev.Aspire.ServiceDefaults.Middleware.ExceptionHandlingMiddleware).FullName
                 && root.TryGetProperty("ExceptionType", out var type) && type.GetString() == "Exception";
-        }));
+        });
     }
 
     [Fact]
@@ -434,8 +434,8 @@ public sealed class CareerStartupLoggingTests
                 ["CustomerEmail"] = stateSentinel,
                 ["StatusCode"] = 503
             }, new InvalidOperationException("formatter-exception@example.invalid"), (_, _) => messageSentinel);
-        var line = Assert.Single(factory.Logs.Lines.Where(value =>
-            value.Contains("SourceWarningProbe", StringComparison.Ordinal)));
+        var line = Assert.Single(factory.Logs.Lines, value =>
+            value.Contains("SourceWarningProbe", StringComparison.Ordinal));
         using var identity = JsonDocument.Parse(line);
         Assert.Equal(1901, identity.RootElement.GetProperty("eventId").GetInt32());
         Assert.DoesNotContain(messageSentinel, line, StringComparison.Ordinal);
