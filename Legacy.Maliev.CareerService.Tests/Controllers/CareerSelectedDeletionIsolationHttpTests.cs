@@ -88,7 +88,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
             using var detail = await reader.GetAsync($"/Jobs/{offer.Id}");
             Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
             using var json = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
-            AssertOffer(json.RootElement, offer, levels.Single(level => level.Id == offer.LevelId));
+            AssertOffer(json.RootElement, offer, levels.Single(level => level.Id == offer.LevelId), detail: true);
         }
         foreach (var route in new[] { "/Jobs", "/jobs/" })
         {
@@ -152,7 +152,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
         }
     }
 
-    private static void AssertOffer(JsonElement json, JobOffer offer, JobLevel level)
+    private static void AssertOffer(JsonElement json, JobOffer offer, JobLevel level, bool detail = false)
     {
         Assert.Equal(offer.Id, json.GetProperty("id").GetInt32());
         Assert.Equal(offer.LevelId, json.GetProperty("levelId").GetInt32());
@@ -167,7 +167,8 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
         Assert.False(json.TryGetProperty("introduction", out _));
         Assert.False(json.TryGetProperty("location", out _));
         Assert.False(json.TryGetProperty("Id", out _));
-        AssertLevel(json.GetProperty("level"), level);
+        if (detail) Assert.False(json.TryGetProperty("level", out _));
+        else AssertLevel(json.GetProperty("level"), level);
     }
 
     private static void AssertLevel(JsonElement json, JobLevel level, bool direct = false)
