@@ -18,6 +18,19 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_SatisfiesStructuralContract()
     {
         WorkflowContractValidator.Validate(Workflow);
+        foreach (var (original, replacement) in new[]
+        {
+            ("--warnaserror", ""),
+            ("--no-build --no-restore --filter", "--no-restore --filter"),
+            ("FullyQualifiedName~CareerOfferDetailSourceHttpTests", "FullyQualifiedName~NoSuchTests"),
+            ("Total:[[:space:]]+12,", "Total:[[:space:]]+0,"),
+            ("timeout-minutes: 20", "timeout-minutes: 21"),
+            ("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68", "actions/setup-dotnet@main"),
+            ("Build Release and run changed-behavior regressions before full suite", "Unreviewed focused regression"),
+        })
+        {
+            AssertMutationRejected(original, replacement);
+        }
     }
 
     [Theory]
@@ -181,6 +194,19 @@ internal static partial class WorkflowContractValidator
 {
     private const string CheckoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8";
+    private const string FocusSetupAction = "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68";
+    private const string FocusStepName = "Build Release and run changed-behavior regressions before full suite";
+    private const string FocusCommand = """
+        set -euo pipefail
+        export GITHUB_ACTIONS=false
+        mkdir -p runner-results/focus12
+        dotnet restore Legacy.Maliev.CareerService.slnx 2>&1 | tee runner-results/focus12/restore.log
+        dotnet build Legacy.Maliev.CareerService.slnx --configuration Release --no-restore --warnaserror 2>&1 | tee runner-results/focus12/build.log
+        grep -Eq '^[[:space:]]*0 Warning\(s\)[[:space:]]*$' runner-results/focus12/build.log
+        grep -Eq '^[[:space:]]*0 Error\(s\)[[:space:]]*$' runner-results/focus12/build.log
+        VSTestCollect='' dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~CareerOfferDetailSourceHttpTests|FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor|FullyQualifiedName~SelectedOfferDeletion_PreservesSharedLevelsAndSurvivorsAndRecomputesGlobalOpenStatus|FullyQualifiedName~LevelGraph_' --logger 'trx;LogFileName=career-focus12.trx' --results-directory runner-results/focus12 2>&1 | tee runner-results/focus12/test.log
+        grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+12, Skipped:[[:space:]]+0, Total:[[:space:]]+12,' runner-results/focus12/test.log
+        """;
 
     public static void Validate(string workflow)
     {
@@ -222,13 +248,43 @@ internal static partial class WorkflowContractValidator
         }
 
         RequireScalarValue(validateJob, "name", "validate");
-        RejectDuplicatedValidationActionsAndCommands(jobs);
-
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 7)
+        if (steps.Children.Count != 9)
         {
-            throw new InvalidOperationException("Validate job must contain four validation, one scaffold guard, and two evidence steps.");
+            throw new InvalidOperationException("Validate job must preserve the seven original steps plus exactly the two reviewed build-first focus steps.");
         }
+
+        var focusSetup = RequireMapping(steps.Children[3], "focused SDK setup");
+        var setupKeys = focusSetup.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal);
+        if (!setupKeys.SetEquals(["name", "uses", "timeout-minutes", "with"]))
+        {
+            throw new InvalidOperationException("Focused SDK setup must contain only its reviewed inputs and timeout.");
+        }
+        RequireScalarValue(focusSetup, "name", "Set up .NET for build-first focused regression");
+        RequireScalarValue(focusSetup, "uses", FocusSetupAction);
+        RequireScalarValue(focusSetup, "timeout-minutes", "5");
+        var setupInputs = RequireMapping(focusSetup, "with");
+        if (setupInputs.Children.Count != 1)
+        {
+            throw new InvalidOperationException("Focused SDK setup must contain only dotnet-version.");
+        }
+        RequireScalarValue(setupInputs, "dotnet-version", "10.0.x");
+        var focus = RequireMapping(steps.Children[4], "build-first focused regression");
+        var focusKeys = focus.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal);
+        if (!focusKeys.SetEquals(["name", "shell", "timeout-minutes", "run"]))
+        {
+            throw new InvalidOperationException("Focused regression must contain only the reviewed command and timeout.");
+        }
+        RequireScalarValue(focus, "name", FocusStepName);
+        RequireScalarValue(focus, "shell", "bash");
+        RequireScalarValue(focus, "timeout-minutes", "20");
+        var focusRun = RequireScalar(GetRequired(focus, "run"));
+        if (!string.Equals(focusRun.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n'),
+            FocusCommand.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Focused regression must preserve exact Release zero-warning/error and twelve-case selection gates.");
+        }
+        RejectDuplicatedValidationActionsAndCommands(jobs, focusSetup, focus);
 
         var environment = RequireMapping(validateJob, "env");
         if (environment.Children.Count != 4)
@@ -241,7 +297,7 @@ internal static partial class WorkflowContractValidator
         RequireScalarValue(environment, "VSTestLogger", "trx");
         RequireScalarValue(environment, "VSTestResultsDirectory", "${{ github.workspace }}/runner-results");
 
-        var scaffold = RequireMapping(steps.Children[4], "scaffold guard");
+        var scaffold = RequireMapping(steps.Children[6], "scaffold guard");
         if (scaffold.Children.Count != 3)
         {
             throw new InvalidOperationException("Scaffold guard must contain only name, shell, and run.");
@@ -250,7 +306,7 @@ internal static partial class WorkflowContractValidator
         RequireScalarValue(scaffold, "name", "Validate safe scaffold orchestration");
         RequireScalarValue(scaffold, "shell", "pwsh");
         RequireScalarValue(scaffold, "run", "./tooling/Test-CareerScaffoldContract.ps1 -EvidencePath ./runner-results/career-scaffold-orchestration.json");
-        var gate = RequireMapping(steps.Children[5], "coverage gate");
+        var gate = RequireMapping(steps.Children[7], "coverage gate");
         if (gate.Children.Count != 2)
         {
             throw new InvalidOperationException("Coverage gate must contain only name and run.");
@@ -258,7 +314,7 @@ internal static partial class WorkflowContractValidator
 
         RequireScalarValue(gate, "name", "Gate owned production coverage");
         RequireScalarValue(gate, "run", "python3 scripts/verify-runner-coverage.py runner-results");
-        var evidence = RequireMapping(steps.Children[6], "evidence upload");
+        var evidence = RequireMapping(steps.Children[8], "evidence upload");
         if (evidence.Children.Count != 4)
         {
             throw new InvalidOperationException("Evidence upload must contain exactly name, if, uses and with.");
@@ -307,7 +363,7 @@ internal static partial class WorkflowContractValidator
                 ["persist-credentials"] = "false",
             });
         ValidateStep(
-            steps.Children[3],
+            steps.Children[5],
             SharedValidationAction,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -375,7 +431,8 @@ internal static partial class WorkflowContractValidator
         }
     }
 
-    private static void RejectDuplicatedValidationActionsAndCommands(YamlMappingNode jobs)
+    private static void RejectDuplicatedValidationActionsAndCommands(
+        YamlMappingNode jobs, YamlMappingNode reviewedSetup, YamlMappingNode reviewedFocus)
     {
         foreach (var jobNode in jobs.Children.Values.OfType<YamlMappingNode>())
         {
@@ -387,6 +444,12 @@ internal static partial class WorkflowContractValidator
 
             foreach (var stepNode in steps.Children.OfType<YamlMappingNode>())
             {
+                // These exact two nodes have already passed the strict pin/command checks above.
+                // Every other node retains the original generic duplicate-validation prohibition.
+                if (ReferenceEquals(stepNode, reviewedSetup) || ReferenceEquals(stepNode, reviewedFocus))
+                {
+                    continue;
+                }
                 if (GetOptional(stepNode, "uses") is YamlScalarNode usesNode)
                 {
                     var action = usesNode.Value ?? string.Empty;
