@@ -751,34 +751,76 @@ public sealed class CareerRouteFixture : IAsyncLifetime
 {
     private const string Issuer = "https://career-component.example.invalid";
     private const string Audience = "career-component";
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7.4-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
-    private readonly RSA key = RSA.Create(2048);
-    private readonly RSA wrongKey = RSA.Create(2048);
+    private readonly CareerFixtureLifetime lifetime = new("route");
+    private readonly PostgreSqlContainer postgres;
+    private readonly IContainer redis;
+    private readonly RSA key;
+    private readonly RSA wrongKey;
+
+    public CareerRouteFixture()
+    {
+        try
+        {
+            key = lifetime.Create("key", 3, () => RSA.Create(2048), value => { value.Dispose(); return ValueTask.CompletedTask; });
+            wrongKey = lifetime.Create("wrong-key", 3, () => RSA.Create(2048), value => { value.Dispose(); return ValueTask.CompletedTask; });
+            postgres = lifetime.Create("postgres", 4,
+                () => new PostgreSqlBuilder("postgres:18-alpine").WithLabel("com.maliev.career.fixture", lifetime.FixtureId).Build(),
+                value => value.DisposeAsync(), value => CareerFixtureLifetime.ObserveContainer(value, "postgres:18-alpine"));
+            redis = lifetime.Create("redis", 4,
+                () => new ContainerBuilder("redis:7.4-alpine").WithPortBinding(6379, true)
+                    .WithLabel("com.maliev.career.fixture", lifetime.FixtureId)
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build(),
+                value => value.DisposeAsync(), value => CareerFixtureLifetime.ObserveContainer(value, "redis:7.4-alpine"));
+        }
+        catch (Exception primary)
+        {
+            lifetime.DisposePreservingAsync(primary).GetAwaiter().GetResult();
+            throw;
+        }
+    }
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
-        await postgres.StartAsync(); await redis.StartAsync();
-        await using var db = Context(); await db.Database.MigrateAsync();
-        Factory = new CareerFactory(this);
+        try
+        {
+            await lifetime.RunAsync("initialize", async cancellation =>
+            {
+                await lifetime.RunAsync("postgres-start", token => postgres.StartAsync(token), TimeSpan.FromMinutes(4), cancellation);
+                lifetime.ObserveOwned(postgres);
+                await lifetime.RunAsync("redis-start", token => redis.StartAsync(token), TimeSpan.FromMinutes(4), cancellation);
+                lifetime.ObserveOwned(redis);
+                await lifetime.UseOwnedAsync(Context, (db, token) => db.Database.MigrateAsync(token), cancellation);
+                Factory = lifetime.Create("factory", 2, () => new CareerFactory(this), value => value.DisposeAsync());
+            }, TimeSpan.FromMinutes(4));
+        }
+        catch (Exception primary)
+        {
+            await lifetime.DisposePreservingAsync(primary);
+            throw;
+        }
     }
-
-    public CareerDbContext Context() => new(new DbContextOptionsBuilder<CareerDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
-    public async Task ResetAsync()
+    public CareerDbContext Context() => lifetime.Create("context", 1,
+        () => new CareerDbContext(new DbContextOptionsBuilder<CareerDbContext>().UseNpgsql(postgres.GetConnectionString()).Options),
+        value => value.DisposeAsync());
+    public Task ResetAsync() => lifetime.RunAsync("reset", async cancellation =>
     {
-        await using var db = Context();
-        await db.Offers.ExecuteDeleteAsync(); await db.Levels.ExecuteDeleteAsync();
-    }
-    public async Task<int> SeedLevelAsync()
+        await lifetime.UseOwnedAsync(Context, async (db, token) =>
+        {
+            await db.Offers.ExecuteDeleteAsync(token);
+            await db.Levels.ExecuteDeleteAsync(token);
+        }, cancellation);
+    }, TimeSpan.FromSeconds(90), serialize: true);
+    public Task<int> SeedLevelAsync() => lifetime.UseOwnedAsync(Context, async (db, token) =>
     {
-        await using var db = Context(); var level = new JobLevel { Name = "Fixture level", Description = "Fixture description" };
-        db.Levels.Add(level); await db.SaveChangesAsync(); return level.Id;
-    }
+        var level = new JobLevel { Name = "Fixture level", Description = "Fixture description" };
+        db.Levels.Add(level); await db.SaveChangesAsync(token); return level.Id;
+    });
     public HttpClient Client(string? permission = null, string authority = "valid")
     {
-        var client = Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var client = lifetime.Create("client", 0,
+            () => Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false }),
+            value => { value.Dispose(); return ValueTask.CompletedTask; });
         if (permission is null || authority == "anonymous") return client;
         var claims = new List<Claim> { new(JwtRegisteredClaimNames.Sub, "service:career-fixture-" + Guid.NewGuid().ToString("N")) };
         if (authority != "missing-permission") claims.Add(new("permissions", permission));
@@ -789,11 +831,7 @@ public sealed class CareerRouteFixture : IAsyncLifetime
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
         return client;
     }
-    public async Task DisposeAsync()
-    {
-        if (Factory is not null) await Factory.DisposeAsync();
-        key.Dispose(); wrongKey.Dispose(); await redis.DisposeAsync(); await postgres.DisposeAsync();
-    }
+    public Task DisposeAsync() => lifetime.DisposeAsync();
     private sealed class CareerFactory(CareerRouteFixture fixture) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Production");
