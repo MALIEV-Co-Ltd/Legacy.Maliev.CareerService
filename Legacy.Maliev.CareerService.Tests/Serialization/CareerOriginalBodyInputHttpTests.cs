@@ -264,6 +264,11 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
         Assert.All(capture.Messages, message => Assert.DoesNotContain("private-key-marker", message, StringComparison.Ordinal));
     }
 
+    private static string Route(string kind) => kind == "offer" ? "/Jobs" : "/jobs/levels";
+
+    private static string Permission(string kind, string action) =>
+        "legacy-career." + (kind == "offer" ? "jobs" : "levels") + "." + action;
+
     private static string Payload(string kind, int levelId)
     {
         var date = new DateTime(1980, 1, 1);
