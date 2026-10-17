@@ -56,6 +56,7 @@ internal sealed class CareerLevelRequestJsonResolver(IJsonTypeInfoResolver inner
         }
         if (configured != Fields.Length)
             throw new InvalidOperationException("Exactly two consumed level properties are required.");
+        CareerScalarBodyReaders.ConfigureLevel(metadata, options);
         return metadata;
     }
 }
