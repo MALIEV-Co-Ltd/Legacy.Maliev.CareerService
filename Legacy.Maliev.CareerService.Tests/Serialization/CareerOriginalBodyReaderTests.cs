@@ -82,7 +82,7 @@ public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, IT
     [Theory]
     [InlineData(31, "success", "success")]
     [InlineData(32, "success", "success")]
-    [InlineData(33, "failure", "success")]
+    [InlineData(33, "failure", "failure")]
     [InlineData(65, "failure", "failure")]
     public async Task OriginalMvcDepthBoundary_AppliesEvenToUnknownSkippedData(int depth, string sourceKind, string nativeKind)
     {
