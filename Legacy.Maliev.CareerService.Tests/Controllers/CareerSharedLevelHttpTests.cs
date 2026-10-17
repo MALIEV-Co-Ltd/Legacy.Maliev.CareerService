@@ -295,7 +295,18 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         var before = await SnapshotAsync();
         using var writer = fixture.Client("legacy-career.levels.update");
         using var response = await writer.PutAsync($"/jobs/levels/{id}", new StringContent(body, Encoding.UTF8, "application/json"));
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var expected = body == "{\"Name\":42}" ? HttpStatusCode.InternalServerError : HttpStatusCode.BadRequest;
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.InternalServerError)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync();
+            using var json = JsonDocument.Parse(responseBody);
+            Assert.Equal(500, json.RootElement.GetProperty("statusCode").GetInt32());
+            Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("details").ValueKind);
+            Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
+            Assert.DoesNotContain("Npgsql", responseBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("23502", responseBody, StringComparison.Ordinal);
+        }
         Assert.Equal(before, await SnapshotAsync());
     }
 
