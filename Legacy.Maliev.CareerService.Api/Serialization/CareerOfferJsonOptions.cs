@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Legacy.Maliev.CareerService.Api.Serialization;
 
-/// <summary>Registers property-local readers for the three consumed offer request strings.</summary>
+/// <summary>Registers property-local readers for the six offer request strings without expanding the write whitelist.</summary>
 public static class CareerOfferJsonOptions
 {
     /// <summary>Preserves native DTO traversal and changes only consumed offer input metadata.</summary>
@@ -26,7 +26,7 @@ public static class CareerOfferJsonOptions
 internal sealed class CareerOfferRequestJsonResolver(IJsonTypeInfoResolver inner) : IJsonTypeInfoResolver
 {
     private static readonly string[] Fields =
-        [nameof(UpsertJobOfferRequest.Title), nameof(UpsertJobOfferRequest.Description), nameof(UpsertJobOfferRequest.Prerequisites)];
+        [nameof(UpsertJobOfferRequest.Title), nameof(UpsertJobOfferRequest.Description), nameof(UpsertJobOfferRequest.Prerequisites), nameof(UpsertJobOfferRequest.Introduction), nameof(UpsertJobOfferRequest.WhatWeOffer), nameof(UpsertJobOfferRequest.Location)];
     private static readonly JsonConverter<string> TextReader = new CareerOfferConsumedStringReader();
 
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
@@ -55,7 +55,8 @@ internal sealed class CareerOfferRequestJsonResolver(IJsonTypeInfoResolver inner
             configured++;
         }
         if (configured != Fields.Length)
-            throw new InvalidOperationException("Exactly three consumed offer properties are required.");
+            throw new InvalidOperationException("Exactly six offer string properties are required.");
+        CareerScalarBodyReaders.ConfigureOffer(metadata, options);
         return metadata;
     }
 }

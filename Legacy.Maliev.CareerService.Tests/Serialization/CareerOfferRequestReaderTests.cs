@@ -103,11 +103,15 @@ public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, IT
         var native = CareerOfferNativeOptions.Create(fixture.Factory.Services);
         var request = new UpsertJobOfferRequest(42, "T", "I", "D", "P", "W", "L", true);
         Assert.Equal(Stj.Serialize(request, native), Stj.Serialize(request, Candidate()));
+        // Preserve all five original native controls. The four scalar cases now
+        // inside issue66 compare their approved source projection instead.
         foreach (var json in new[] { """{"LevelId":true}""", """{"IsFilled":42}""", """{"Introduction":42}""", """{"WhatWeOffer":true}""", """{"Location":42}""" })
-        {
             Assert.Throws<System.Text.Json.JsonException>(() => Stj.Deserialize<UpsertJobOfferRequest>(json, native));
-            Assert.Throws<System.Text.Json.JsonException>(() => Stj.Deserialize<UpsertJobOfferRequest>(json, Candidate()));
-        }
+        Assert.Throws<System.Text.Json.JsonException>(() => Stj.Deserialize<UpsertJobOfferRequest>("""{"LevelId":true}""", Candidate()));
+        Assert.True(Stj.Deserialize<UpsertJobOfferRequest>("""{"IsFilled":42}""", Candidate())!.IsFilled);
+        Assert.Equal("42", Stj.Deserialize<UpsertJobOfferRequest>("""{"Introduction":42}""", Candidate())!.Introduction);
+        Assert.Equal("true", Stj.Deserialize<UpsertJobOfferRequest>("""{"WhatWeOffer":true}""", Candidate())!.WhatWeOffer);
+        Assert.Equal("42", Stj.Deserialize<UpsertJobOfferRequest>("""{"Location":42}""", Candidate())!.Location);
         Assert.Throws<System.Text.Json.JsonException>(() => Stj.Deserialize<JobOfferResponse>("""{"Title":42}""", Candidate()));
         // Removing the Offer registration must retain the independent Level registration.
         Assert.Equal("42", Stj.Deserialize<UpsertJobLevelRequest>("""{"Name":42}""", native)!.Name);
