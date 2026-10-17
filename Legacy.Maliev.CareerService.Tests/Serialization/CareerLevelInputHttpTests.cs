@@ -98,8 +98,10 @@ public sealed class CareerLevelInputHttpTests(CareerRouteFixture fixture) : ICla
         await using var db = fixture.Context();
         var level = new JobLevel
         {
-            Name = "Original level", Description = "Original description",
-            CreatedDate = new DateTime(2020, 1, 1), ModifiedDate = new DateTime(2020, 1, 2)
+            Name = "Original level",
+            Description = "Original description",
+            CreatedDate = new DateTime(2020, 1, 1),
+            ModifiedDate = new DateTime(2020, 1, 2)
         };
         db.Levels.Add(level);
         await db.SaveChangesAsync();
@@ -112,8 +114,20 @@ public sealed class CareerLevelInputHttpTests(CareerRouteFixture fixture) : ICla
     {
         await using var db = fixture.Context();
         return JsonSerializer.Serialize(await db.Offers.AsNoTracking().OrderBy(row => row.Id)
-            .Select(row => new { row.Id, row.LevelId, row.Title, row.Description, row.Introduction, row.Prerequisites,
-                row.WhatWeOffer, row.Location, row.IsFilled, row.CreatedDate, row.ModifiedDate }).ToArrayAsync());
+            .Select(row => new
+            {
+                row.Id,
+                row.LevelId,
+                row.Title,
+                row.Description,
+                row.Introduction,
+                row.Prerequisites,
+                row.WhatWeOffer,
+                row.Location,
+                row.IsFilled,
+                row.CreatedDate,
+                row.ModifiedDate
+            }).ToArrayAsync());
     }
 
     private async Task<string> Snapshot()
