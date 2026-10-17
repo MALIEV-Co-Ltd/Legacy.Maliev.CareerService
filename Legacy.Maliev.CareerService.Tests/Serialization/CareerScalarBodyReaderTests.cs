@@ -194,7 +194,7 @@ public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITes
     {
         var services = fixture.Factory.Services;
         var setups = services.GetServices<IConfigureOptions<MvcJsonOptions>>().ToArray();
-        Assert.Single(setups.Where(CareerLevelNativeOptions.IsOwned));
+        Assert.Single(setups, CareerLevelNativeOptions.IsOwned);
         return CareerOfferNativeOptions.Construct(setups.Where(setup => !CareerLevelNativeOptions.IsOwned(setup)).ToArray(),
             services.GetServices<IPostConfigureOptions<MvcJsonOptions>>().ToArray(),
             services.GetServices<IValidateOptions<MvcJsonOptions>>().ToArray()).JsonSerializerOptions;
