@@ -84,7 +84,7 @@ public sealed class JobsController(ICareerService careerService) : ControllerBas
         CancellationToken cancellationToken)
     {
         var jobs = await careerService.GetPaginatedAsync(sort, search, index, size, cancellationToken);
-        return jobs.Items.Count == 0 ? NotFound() : jobs;
+        return jobs.Items.Count == 0 || size == 0 ? NotFound() : jobs;
     }
 
     /// <summary>Updates a job offer.</summary>
