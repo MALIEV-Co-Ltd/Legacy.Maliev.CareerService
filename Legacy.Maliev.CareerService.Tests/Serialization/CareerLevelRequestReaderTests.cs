@@ -13,10 +13,15 @@ using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Compares level request projection with the retained public source reader.</summary>
+/// <param name="fixture">The shared route fixture supplying native and adapted MVC serializer options for level request comparisons.</param>
+/// <param name="output">The test output sink that records source projections, native dispositions, and adapted level values.</param>
 [Collection("Career shared level")]
 public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, ITestOutputHelper output)
     : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Provides accepted and rejected level-body cases for source and candidate comparison.</summary>
+    /// <returns>Theory rows pairing level request JSON with the expected native MVC disposition: matching values, a retained-null difference, or rejection.</returns>
     public static IEnumerable<object[]> Bodies()
     {
         yield return ["""{}""", "same"];
@@ -38,6 +43,9 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         yield return ["""{"Name":"2026-10-17T01:02:03Z","Description":"\n"}""", "same"];
     }
 
+    /// <summary>Checks consumed level fields against the public source reader's projection.</summary>
+    /// <param name="json">The level request JSON read by the retained source reader, fresh native MVC options, and the adapted candidate reader.</param>
+    /// <param name="nativeDisposition">The expected native MVC outcome: same for matching projections, name-null or description-null for a later-null difference, or reject for an unsupported scalar.</param>
     [Theory]
     [MemberData(nameof(Bodies))]
     public void ConsumedProjection_MatchesPublicSourceReader(string json, string nativeDisposition)
@@ -107,6 +115,7 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.Equal(source.Description, target.Description);
     }
 
+    /// <summary>Checks that ignored null assignments preserve earlier nonnull values.</summary>
     [Fact]
     public void SourceNullIgnore_RetainsPriorNonNullAssignments()
     {
@@ -116,6 +125,8 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.Equal("D", source.Description);
     }
 
+    /// <summary>Checks that consumed container values fail without producing a request.</summary>
+    /// <param name="json">The level JSON containing an array or object in Name or Description that both readers must reject without producing a request.</param>
     [Theory]
     [InlineData("""{"Name":[]}""")]
     [InlineData("""{"Description":{}}""")]
@@ -127,6 +138,8 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.Throws<System.Text.Json.JsonException>(() => Stj.Deserialize<UpsertJobLevelRequest>(json, Candidate()));
     }
 
+    /// <summary>Checks rejection of nonobject JSON roots.</summary>
+    /// <param name="json">The array, number, boolean, or string JSON root that both level readers must reject instead of accepting as a request object.</param>
     [Theory]
     [InlineData("[]")]
     [InlineData("123")]
@@ -138,6 +151,7 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.Throws<System.Text.Json.JsonException>(() => Stj.Deserialize<UpsertJobLevelRequest>(json, Candidate()));
     }
 
+    /// <summary>Checks that a whole null body reaches the unchanged controller guard.</summary>
     [Fact]
     public void WholeNull_RemainsNullForTheUnchangedControllerGuard()
     {
@@ -145,6 +159,7 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.Null(Stj.Deserialize<UpsertJobLevelRequest>("null", Candidate()));
     }
 
+    /// <summary>Checks constructor assignments and native behavior for unrelated types.</summary>
     [Fact]
     public void ConstructorWritesAndUnrelatedTypesRetainNativeBehavior()
     {
@@ -161,6 +176,7 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
             Stj.Deserialize<JobLevelResponse>("""{"Name":42}""", Candidate()));
     }
 
+    /// <summary>Checks exact DTO registration and fresh native serializer options.</summary>
     [Fact]
     public void Registration_IsExactAndNativeOptionsAreFresh()
     {
@@ -175,6 +191,8 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
             Stj.Deserialize<UpsertJobLevelRequest>("""{"Name":42}""", native));
     }
 
+    /// <summary>Checks culture-independent parsing of numeric text.</summary>
+    /// <param name="culture">The culture name assigned to current formatting and UI cultures while checking that numeric JSON lexemes retain their original text.</param>
     [Theory]
     [InlineData("en-US")]
     [InlineData("th-TH")]
@@ -198,6 +216,8 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         }
     }
 
+    /// <summary>Checks that later valid text cannot hide an earlier invalid occurrence.</summary>
+    /// <param name="field">The consumed level field, Name or Description, whose earlier object occurrence must remain invalid despite a later valid string.</param>
     [Theory]
     [InlineData("Name")]
     [InlineData("Description")]
@@ -211,6 +231,7 @@ public sealed class CareerLevelRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.DoesNotContain("valid", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Checks that segmented numeric input is preserved without rounding.</summary>
     [Fact]
     public void NumericLexeme_CrossesInputSegmentsWithoutRounding()
     {

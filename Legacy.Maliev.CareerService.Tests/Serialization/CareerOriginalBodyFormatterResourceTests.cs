@@ -12,9 +12,15 @@ using Microsoft.Extensions.Options;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks formatter buffer ownership, drain policy, and decoder-failure classification.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
 [Collection("Career shared level")]
 public sealed class CareerOriginalBodyFormatterResourceTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks stock buffer ownership and original draining behavior on success and failure.</summary>
+    /// <param name="candidate">Whether to exercise the registered candidate formatter instead of the original MVC formatter.</param>
+    /// <param name="fault">Whether the fragmented request stream throws an I/O failure after 40,000 bytes instead of draining successfully.</param>
+    /// <returns>A task that completes when drain behavior, response-owned buffer disposal, temporary-file removal, and request-stream ownership assertions finish.</returns>
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -74,6 +80,8 @@ public sealed class CareerOriginalBodyFormatterResourceTests(CareerRouteFixture 
         }
     }
 
+    /// <summary>Checks that decoder faults are not silently classified as malformed JSON.</summary>
+    /// <returns>A task that completes when source and candidate readers both preserve the decoder fallback exception classification.</returns>
     [Fact]
     public async Task DecoderFault_IsNotSilentlyReclassifiedAsMalformedJson()
     {

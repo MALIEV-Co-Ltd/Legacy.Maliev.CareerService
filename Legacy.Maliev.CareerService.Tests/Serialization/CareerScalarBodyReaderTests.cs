@@ -11,10 +11,15 @@ using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks original scalar projection and validation without expanding write whitelists.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
+/// <param name="output">The xUnit output sink for recording source, native, and candidate comparison evidence.</param>
 [Collection("Career shared level")]
 public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITestOutputHelper output)
     : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Provides offer scalar bodies and their expected projections.</summary>
+    /// <returns>Theory rows containing offer JSON, expected level and nullable filled values, expected rich text values, and native-reader behavior.</returns>
     public static IEnumerable<object[]> OfferBodies()
     {
         yield return ["""{}""", 0, "null", null!, null!, null!, "same"];
@@ -39,6 +44,14 @@ public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITes
         yield return ["""{"Introduction":"","WhatWeOffer":"  ไทย  ","Location":"Bangkok"}""", 0, "null", "", "  ไทย  ", "Bangkok", "same"];
     }
 
+    /// <summary>Records source, native, and candidate scalar outcomes against explicit expectations.</summary>
+    /// <param name="json">The offer JSON text supplied to source, native, and candidate scalar readers.</param>
+    /// <param name="levelId">The expected integer level identifier after source-compatible conversion, including zero for absent or empty input.</param>
+    /// <param name="filled">The expected nullable filled state encoded as true, false, or the literal null.</param>
+    /// <param name="introduction">The expected Introduction text after scalar projection and duplicate-null handling, or null when unset.</param>
+    /// <param name="benefits">The expected WhatWeOffer text after scalar projection and duplicate-null handling, or null when unset.</param>
+    /// <param name="location">The expected Location text after scalar projection and duplicate-null handling, or null when unset.</param>
+    /// <param name="nativeDisposition">The native-reader expectation: same, reject followed by the error path, filled-null, or rich-null.</param>
     [Theory]
     [MemberData(nameof(OfferBodies))]
     public void ScalarProjection_RecordsPublicSourceNativeAndCandidate(
@@ -77,6 +90,9 @@ public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITes
         output.WriteLine("CAREER-SCALAR-CANDIDATE " + OfferProjection(candidate));
     }
 
+    /// <summary>Checks recognized ignored scalar validation without entering requests or writers.</summary>
+    /// <param name="level">Whether to validate a job-level body rather than a job-offer body.</param>
+    /// <param name="json">The JSON body containing recognized Id or timestamp scalar values that must validate without entering the DTO write projection.</param>
     [Theory]
     [InlineData(false, """{"Id":" +7 ","CreatedDate":"2020-01-02T03:04:05Z","ModifiedDate":null}""")]
     [InlineData(true, """{"Id":7,"Id":null,"CreatedDate":"","ModifiedDate":"01/02/2020"}""")]
@@ -104,6 +120,11 @@ public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITes
         output.WriteLine("CAREER-SCALAR-IGNORED-PUBLIC-NATIVE-CANDIDATE " + (level ? "level " : "offer ") + json);
     }
 
+    /// <summary>Checks invalid scalar failure before controller execution.</summary>
+    /// <param name="level">Whether the invalid scalar belongs to a job-level body rather than a job-offer body.</param>
+    /// <param name="json">The JSON body containing an invalid recognized scalar occurrence, possibly followed by a valid duplicate.</param>
+    /// <param name="path">The exact $.property path expected from the candidate JSON exception.</param>
+    /// <param name="nativeRejects">Whether native offer deserialization also rejects the value rather than accepting an ignored property.</param>
     [Theory]
     [InlineData(false, """{"LevelId":true}""", "$.LevelId", true)]
     [InlineData(false, """{"LevelId":2147483648}""", "$.LevelId", true)]
@@ -144,6 +165,8 @@ public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITes
         output.WriteLine("CAREER-SCALAR-REJECT SOURCE-PUBLIC CANDIDATE " + path);
     }
 
+    /// <summary>Checks ignored date representations against known source-reader acceptance.</summary>
+    /// <param name="json">The offer JSON containing an unusual CreatedDate lexeme already accepted by the public source reader.</param>
     [Theory]
     [InlineData("""{"CreatedDate":"2020-01-01T00:00:00+99:99"}""")]
     [InlineData("""{"CreatedDate":"2020-01-01T24:00:00.0000000Z"}""")]
@@ -154,6 +177,7 @@ public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITes
         Assert.NotNull(Stj.Deserialize<UpsertJobOfferRequest>(json, Candidate()));
     }
 
+    /// <summary>Checks both named DTOs through the complete native factory and candidate writer.</summary>
     [Fact]
     public void CompleteNativeFactoryAndCandidateWriter_PreserveBothNamedDtos()
     {
@@ -168,6 +192,8 @@ public sealed class CareerScalarBodyReaderTests(CareerRouteFixture fixture, ITes
         Assert.Null(Stj.Deserialize<UpsertJobLevelRequest>("null", Candidate()));
     }
 
+    /// <summary>Checks invariant source culture across scalar readers.</summary>
+    /// <param name="culture">The en-US, th-TH, or fr-FR current culture used while invariant numeric, Boolean, and date scalar conversion is checked.</param>
     [Theory]
     [InlineData("en-US")]
     [InlineData("th-TH")]

@@ -6,8 +6,10 @@ using Npgsql;
 
 namespace Legacy.Maliev.CareerService.Tests.Data;
 
+/// <summary>Checks explicit provider configuration without opening a database connection.</summary>
 public sealed class CareerContextConfigurationContractTests
 {
+    /// <summary>Checks that explicit Npgsql configuration builds the legacy model without connecting.</summary>
     [Fact]
     public void ExplicitNpgsqlConnection_IsPreservedWhileBuildingTheLegacyModelWithoutOpeningIt()
     {
@@ -34,6 +36,7 @@ public sealed class CareerContextConfigurationContractTests
         Assert.Empty(context.ChangeTracker.Entries());
     }
 
+    /// <summary>Checks that missing provider configuration cannot fall back to a legacy connection.</summary>
     [Fact]
     public void MissingProvider_CannotBuildAModelUsingAnImplicitLegacyConnection()
     {

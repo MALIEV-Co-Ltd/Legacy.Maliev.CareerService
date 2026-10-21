@@ -8,9 +8,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks authorization, concurrency, cancellation, and documentation through real Career hosts.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, production host, and controlled IAM fixture used for the HTTP assertions.</param>
 [Collection("Career scaffold runtime")]
 public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixture) : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks generated EF preview code and queries against the migrated owned graph.</summary>
+    /// <returns>A task that completes after checking generated EF preview code and queries against the migrated owned graph.</returns>
     [Fact]
     public async Task Scaffold_ActualEfPreviewBuildAndGeneratedQueriesPreserveMigratedOwnedGraph()
     {
@@ -19,6 +23,9 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         await CareerScaffoldRuntimeProof.RunAsync(fixture, level.Id, offer.Id);
     }
 
+    /// <summary>Checks fresh IAM authorization and deletion of only the selected PostgreSQL row.</summary>
+    /// <param name="kind">The resource to mutate: offer selects the Jobs route and jobs permission; level selects the levels route and levels permission.</param>
+    /// <returns>A task that completes after checking fresh IAM authorization and deletion of only the selected PostgreSQL row.</returns>
     [Theory]
     [InlineData("offer")]
     [InlineData("level")]
@@ -39,6 +46,10 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         Assert.Equal(2, fixture.Authorities.Values.Single().LiveCalls);
     }
 
+    /// <summary>Checks that live denial, malformed decisions, and unavailable IAM cannot reuse signed permissions.</summary>
+    /// <param name="kind">The resource to delete: offer selects the Jobs route; level selects the unlinked job-level route.</param>
+    /// <param name="decision">The controlled live IAM outcome: deny, unavailable, malformed, or no-client to omit the IAM registration.</param>
+    /// <returns>A task that completes after checking that live denial, malformed decisions, and unavailable IAM cannot reuse signed permissions.</returns>
     [Theory]
     [InlineData("offer", "deny")]
     [InlineData("offer", "unavailable")]
@@ -64,6 +75,8 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         Assert.Equal(kind == "offer" ? 1 : 0, await db.Offers.CountAsync());
     }
 
+    /// <summary>Checks that foreign-key refusal preserves linked rows and hides provider details.</summary>
+    /// <returns>A task that completes after checking that foreign-key refusal preserves linked rows and hides provider details.</returns>
     [Fact]
     public async Task Delete_LinkedLevel_RealForeignKeyRefusalPreservesOfferAndLevelWithoutProviderDisclosure()
     {
@@ -78,6 +91,9 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         Assert.Equal(offer.Id, (await db.Offers.SingleAsync()).Id);
     }
 
+    /// <summary>Checks that a stale update returns conflict and preserves the committed winner.</summary>
+    /// <param name="kind">The resource to mutate: offer selects the Jobs route and jobs permission; level selects the levels route and levels permission.</param>
+    /// <returns>A task that completes after checking that a stale update returns conflict and preserves the committed winner.</returns>
     [Theory]
     [InlineData("offer")]
     [InlineData("level")]
@@ -103,6 +119,9 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         Assert.DoesNotContain("DbUpdateConcurrencyException", await conflict.Content.ReadAsStringAsync());
     }
 
+    /// <summary>Checks that a stale deletion returns conflict without reviving a deleted row.</summary>
+    /// <param name="kind">The resource to mutate: offer selects the Jobs route and jobs permission; level selects the levels route and levels permission.</param>
+    /// <returns>A task that completes after checking that a stale deletion returns conflict without reviving a deleted row.</returns>
     [Theory]
     [InlineData("offer")]
     [InlineData("level")]
@@ -132,6 +151,9 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
     }
 
+    /// <summary>Checks that cancellation before a database write leaves persisted rows unchanged.</summary>
+    /// <param name="kind">The resource to mutate: offer selects the Jobs route and jobs permission; level selects the levels route and levels permission.</param>
+    /// <returns>A task that completes after checking that cancellation before a database write leaves persisted rows unchanged.</returns>
     [Theory]
     [InlineData("offer")]
     [InlineData("level")]
@@ -156,6 +178,8 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         Assert.Equal("Original level", (await db.Levels.SingleAsync()).Name);
     }
 
+    /// <summary>Checks nonproduction documentation casing and operations while production documentation stays hidden.</summary>
+    /// <returns>A task that completes after checking nonproduction documentation casing and operations while production documentation stays hidden.</returns>
     [Fact]
     public async Task Documentation_ActualNonProductionHttpPreservesCamelCaseAndSourceActions_ProductionIsHidden()
     {
@@ -182,6 +206,11 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
             Assert.Equal(properties.Order(StringComparer.Ordinal).ToArray(), schemas.GetProperty(name).GetProperty("properties").EnumerateObject().Select(item => item.Name).Order(StringComparer.Ordinal).ToArray());
     }
 
+    /// <summary>Checks that arbitrary save failures preserve generic classification without committing changes.</summary>
+    /// <param name="kind">The resource to update: offer selects a job offer; level selects its job level.</param>
+    /// <param name="invalidOperation">Whether the save interceptor throws InvalidOperationException rather than IOException.</param>
+    /// <param name="status">The expected HTTP error status for the injected save failure: 400 for InvalidOperationException or 500 for IOException.</param>
+    /// <returns>A task that completes after checking that arbitrary save failures preserve generic classification without committing changes.</returns>
     [Theory]
     [InlineData("offer", false, 500)]
     [InlineData("level", false, 500)]
@@ -202,6 +231,10 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
         Assert.Equal("Original level", (await db.Levels.SingleAsync()).Name);
     }
 
+    /// <summary>Checks that caller cancellation during an xmin failure is not converted into conflict.</summary>
+    /// <param name="kind">The stale entity used for the real xmin conflict: offer selects the offer repository methods; level selects the level methods.</param>
+    /// <param name="delete">Whether to attempt deletion rather than an update of the stale entity after the winning update commits.</param>
+    /// <returns>A task that completes after checking that caller cancellation during an xmin failure is not converted into conflict.</returns>
     [Theory]
     [InlineData("offer", false)]
     [InlineData("offer", true)]

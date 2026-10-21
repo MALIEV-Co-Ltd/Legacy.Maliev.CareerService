@@ -28,10 +28,15 @@ using Testcontainers.PostgreSql;
 
 namespace Legacy.Maliev.CareerService.Tests.Startup;
 
+/// <summary>Checks private failure diagnostics through the actual production startup pipeline.</summary>
 public sealed class CareerStartupLoggingTests
 {
     private const string Sensitive = "candidate-private@example.invalid";
 
+    /// <summary>Checks database failures without provider exception text or stack disclosure.</summary>
+    /// <param name="path">The GET route used to trigger a real database read failure or controlled save failure against an uninitialized database.</param>
+    /// <param name="exceptionType">The safe exception type expected in the private incident: PostgresException for reads or DbUpdateException for saves.</param>
+    /// <returns>A task that completes when real database failures return 500 and retain only safe exception metadata without provider text, SQL, or stacks.</returns>
     [Theory]
     [InlineData("/Jobs/job-opening-status", "PostgresException")]
     [InlineData("/Jobs/acceptance-save", "DbUpdateException")]
@@ -58,6 +63,8 @@ public sealed class CareerStartupLoggingTests
         });
     }
 
+    /// <summary>Checks generic 500 responses and correlated redacted critical incidents.</summary>
+    /// <returns>A task that completes when the production 500 response and critical incident preserve correlation and runtime provenance while redacting sensitive data.</returns>
     [Fact]
     public async Task ProductionControllerFailure_ReturnsSafe500AndCorrelatedRedactedCriticalEvent()
     {
@@ -105,6 +112,8 @@ public sealed class CareerStartupLoggingTests
         Assert.DoesNotContain(factory.Logs.Lines, line => line.Contains("responded 500", StringComparison.Ordinal));
     }
 
+    /// <summary>Checks anonymous reads, protected writes, and native dependencies after startup.</summary>
+    /// <returns>A task that completes when production startup preserves anonymous reads, protected writes, and the expected logging and legacy dependency registrations.</returns>
     [Fact]
     public async Task ProductionStartup_PreservesAnonymousReadsProtectedWritesAndNativeDependencies()
     {
@@ -135,6 +144,8 @@ public sealed class CareerStartupLoggingTests
             || name.Contains("NLog", StringComparison.Ordinal) || name.Contains("LoggerService", StringComparison.Ordinal));
     }
 
+    /// <summary>Checks that failures after response start preserve status and existing body bytes.</summary>
+    /// <returns>A task that completes when a post-start exception leaves the 202 status and accepted body intact while emitting a redacted incident.</returns>
     [Fact]
     public async Task ProductionStartedResponse_DoesNotAppendExceptionBodyOrOverwriteStatus()
     {
@@ -156,6 +167,8 @@ public sealed class CareerStartupLoggingTests
         });
     }
 
+    /// <summary>Checks the direct loopback nonce diagnostic's original empty problem response.</summary>
+    /// <returns>A task that completes when the direct-loopback nonce probe returns its original empty problem response and emits one synthetic incident.</returns>
     [Fact]
     public async Task ProductionDiagnostic_DirectLoopbackNonce_ReturnsOriginalEmptyProblemFailure()
     {
@@ -179,6 +192,11 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks private 404 responses for invalid diagnostic methods, peers, or nonces.</summary>
+    /// <param name="method">The HTTP verb used to call /internal/diagnostics/observability, including a rejected POST.</param>
+    /// <param name="peer">The simulated remote IP address, or null, used to verify that only a direct loopback peer can pass the diagnostic gate.</param>
+    /// <param name="nonce">The X-Maliev-Diagnostic-Id header value, or null when omitted, used to exercise invalid or otherwise disallowed probe requests.</param>
+    /// <returns>A task that completes when disallowed probe requests return a private empty 404 without generating synthetic failures.</returns>
     [Theory]
     [InlineData("GET", "127.0.0.1", null)]
     [InlineData("GET", "127.0.0.1", "invalid-nonce")]
@@ -208,6 +226,8 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks diagnostic throttling without creating a second synthetic failure.</summary>
+    /// <returns>A task that completes when a second diagnostic nonce within one minute returns 429 without generating another synthetic failure.</returns>
     [Fact]
     public async Task ProductionDiagnostic_SecondNonceWithinOneMinute_Is429WithoutSecondSyntheticFailure()
     {
@@ -232,6 +252,9 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks stable per-host headers and case-insensitive registered health paths.</summary>
+    /// <param name="prefix">The /Jobs or /jobs route prefix used to check case-insensitive registered health matching.</param>
+    /// <returns>A task that completes when liveness and readiness headers remain stable within one host and distinct across hosts.</returns>
     [Theory]
     [InlineData("/Jobs")]
     [InlineData("/jobs")]
@@ -257,6 +280,8 @@ public sealed class CareerStartupLoggingTests
         other.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks completed 5xx observations without recording sensitive values.</summary>
+    /// <returns>A task that completes when each handled 5xx response produces one safe completed-operation observation and non-5xx responses produce none.</returns>
     [Fact]
     public async Task ProductionCompletedObservation_Handled5xxRecordsEveryResponseWithoutSensitiveValues()
     {
@@ -284,6 +309,8 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks five-minute health buckets and reset after recovery.</summary>
+    /// <returns>A task that completes when health suffix failures throttle by five-minute bucket and resume after status changes or recovery.</returns>
     [Fact]
     public async Task ProductionCompletedObservation_HealthSuffixBucketsThrottleAtFiveMinutesAndResetOnRecovery()
     {
@@ -326,6 +353,8 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks readiness recovery without replacing the application instance.</summary>
+    /// <returns>A task that completes when registered readiness failure and recovery preserve the same instance header and expected failure observations.</returns>
     [Fact]
     public async Task ProductionCompletedObservation_RegisteredReadinessFailureRecoversWithoutChangingInstance()
     {
@@ -358,6 +387,11 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks that unregistered or non-GET health paths receive no instance header.</summary>
+    /// <param name="method">The HTTP verb used for the unregistered or non-GET health-shaped route.</param>
+    /// <param name="path">The request path exercising unrelated, Aspire, non-GET, or test-only health suffix routing.</param>
+    /// <param name="status">The expected numeric HTTP status for that method and route: 200, 404, or 405.</param>
+    /// <returns>A task that completes when the expected response omits registered-health instance headers and emits no failure observations.</returns>
     [Theory]
     [InlineData("GET", "/Other/liveness", 404)]
     [InlineData("GET", "/Jobs/aspire-liveness", 200)]
@@ -377,6 +411,8 @@ public sealed class CareerStartupLoggingTests
         factory.Career.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks one outer incident for a thrown business failure without a completed duplicate.</summary>
+    /// <returns>A task that completes when a thrown business failure produces one outer incident without a duplicate completed-response observation.</returns>
     [Fact]
     public async Task ProductionCompletedObservation_ThrownBusinessFailureHasOneOuterIncidentAndNoCompletedDuplicate()
     {
@@ -412,6 +448,7 @@ public sealed class CareerStartupLoggingTests
         return instance;
     }
 
+    /// <summary>Checks configured private formatting and rejection of arbitrary fields.</summary>
     [Fact]
     public void ProductionPrivateFormatter_UsesConfiguredFormatterAndDropsArbitraryFields()
     {
@@ -574,9 +611,13 @@ public sealed class CareerStartupLoggingTests
 }
 
 // Test-only endpoint exercises a started response through the actual production startup pipeline.
+/// <summary>Exposes test-only endpoints for save failures and already-started responses.</summary>
 [ApiController]
 public sealed class StartedResponseController : ControllerBase
 {
+    /// <summary>Triggers a controlled invalid database save through the production pipeline.</summary>
+    /// <param name="database">The injected Career database context used to add a level and trigger the controlled save failure.</param>
+    /// <returns>A task that completes if the controlled database save succeeds, or faults with the save exception observed by the production middleware.</returns>
     [HttpGet("Jobs/acceptance-save")]
     public async Task SaveAsync([FromServices] CareerDbContext database)
     {
@@ -584,6 +625,9 @@ public sealed class StartedResponseController : ControllerBase
         await database.SaveChangesAsync();
     }
 
+    /// <summary>Starts a controlled-status response for completed-observation tests.</summary>
+    /// <param name="fixture">The test observation controls supplying the HTTP status to set before starting the response.</param>
+    /// <returns>A task that completes when the response has started with the fixture-controlled status.</returns>
     [HttpGet("Jobs/acceptance-observation/handled/{value}")]
     [HttpGet("Jobs/acceptance-observation/readiness")]
     [HttpGet("Jobs/acceptance-observation/liveness")]
@@ -593,6 +637,8 @@ public sealed class StartedResponseController : ControllerBase
         await Response.StartAsync();
     }
 
+    /// <summary>Writes an accepted response before throwing a controlled failure.</summary>
+    /// <returns>A task that faults with the controlled exception after the 202 accepted body has been written and flushed.</returns>
     [HttpGet("Jobs/acceptance-started/{value}")]
     public async Task GetAsync()
     {
@@ -604,11 +650,18 @@ public sealed class StartedResponseController : ControllerBase
 }
 
 // Test-owned clock and health-result control; no timer, worker, connection or production selector.
+/// <summary>Controls time and readiness for completed-observation acceptance tests.</summary>
 public sealed class CompletedObservationFixture : TimeProvider
 {
     private DateTimeOffset _now = new(2026, 10, 10, 0, 0, 0, TimeSpan.Zero);
+    /// <summary>Gets or sets the response status returned by the controlled endpoint.</summary>
     public int ResponseStatus { get; set; } = 503;
+    /// <summary>Gets or sets the controlled readiness health result.</summary>
     public bool ReadinessHealthy { get; set; } = true;
+    /// <summary>Returns the fixture's deterministic UTC time.</summary>
+    /// <returns>The deterministic UTC instant currently held by the observation fixture.</returns>
     public override DateTimeOffset GetUtcNow() => _now;
+    /// <summary>Moves the fixture clock forward by the requested duration.</summary>
+    /// <param name="duration">The time interval added to the deterministic UTC clock to exercise throttle expiry and recovery timing.</param>
     public void Advance(TimeSpan duration) => _now += duration;
 }
