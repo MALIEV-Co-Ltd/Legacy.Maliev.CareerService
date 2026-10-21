@@ -13,6 +13,9 @@ public sealed class CareerGeneratedDocumentationIsolationTests
     [InlineData("Legacy.Maliev.CareerService.Application", "T:Legacy.Maliev.CareerService.Application.Interfaces.ICareerService")]
     [InlineData("Legacy.Maliev.CareerService.Data", "T:Legacy.Maliev.CareerService.Data.CareerDbContext")]
     [InlineData("Legacy.Maliev.CareerService.Domain", "T:Legacy.Maliev.CareerService.Domain.JobOffer")]
+    [InlineData("Legacy.Maliev.CareerService.Tests", "T:Legacy.Maliev.CareerService.Tests.Documentation.CareerGeneratedDocumentationIsolationTests")]
+    [InlineData("Legacy.Maliev.CareerService.Tests", "M:Legacy.Maliev.CareerService.Tests.Documentation.CareerGeneratedDocumentationIsolationTests.CompilerDocumentation_IsAvailableInOutputWithoutSourceRootArtifact(System.String,System.String)")]
+    [InlineData("Legacy.Maliev.CareerService.Tests", "P:Legacy.Maliev.CareerService.Tests.Controllers.CareerLifecycleFixture.Factory")]
     public void CompilerDocumentation_IsAvailableInOutputWithoutSourceRootArtifact(string assemblyName, string documentedMember)
     {
         var output = Path.Combine(AppContext.BaseDirectory, assemblyName + ".xml");
