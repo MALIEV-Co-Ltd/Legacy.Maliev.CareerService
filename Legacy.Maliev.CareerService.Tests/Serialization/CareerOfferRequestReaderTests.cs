@@ -13,10 +13,15 @@ using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Compares offer request projection with the retained public source reader.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
+/// <param name="output">The xUnit output sink for recording source, native, and candidate comparison evidence.</param>
 [Collection("Career shared level")]
 public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, ITestOutputHelper output)
     : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Provides offer-body cases for source, native, and candidate comparison.</summary>
+    /// <returns>Theory rows containing the offer field name, JSON token, duplicate-member suffix, expected source text, and native-reader disposition.</returns>
     public static IEnumerable<object[]> Bodies()
     {
         foreach (var field in new[] { "Title", "Description", "Prerequisites" })
@@ -37,6 +42,12 @@ public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, IT
         }
     }
 
+    /// <summary>Checks consumed offer fields against the public source reader's projection.</summary>
+    /// <param name="field">The consumed offer property to exercise: Title, Description, or Prerequisites.</param>
+    /// <param name="token">The raw JSON value inserted as the first occurrence of the selected property.</param>
+    /// <param name="suffix">Additional JSON member text appended after the first value to exercise duplicate and case-insensitive property handling.</param>
+    /// <param name="expected">The source-reader text projection; the literal null denotes a null result for a lone JSON null.</param>
+    /// <param name="disposition">The native-reader expectation: reject for incompatible tokens, native-null for a later null override, or same for the source projection.</param>
     [Theory]
     [MemberData(nameof(Bodies))]
     public void ConsumedProjection_MatchesPublicSourceReader(
@@ -68,6 +79,9 @@ public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, IT
         output.WriteLine("CAREER-OFFER-CANDIDATE " + JsonConvert.SerializeObject(new { candidate.Title, candidate.Description, candidate.Prerequisites }));
     }
 
+    /// <summary>Checks that later text cannot hide an earlier invalid consumed value.</summary>
+    /// <param name="field">The consumed offer property whose earlier invalid occurrence must remain visible: Title, Description, or Prerequisites.</param>
+    /// <param name="token">The object or array JSON token placed before a later valid string occurrence.</param>
     [Theory]
     [InlineData("Title", "{}")]
     [InlineData("Title", "[]")]
@@ -84,6 +98,8 @@ public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.DoesNotContain("valid", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Checks rejection of nonobject JSON roots.</summary>
+    /// <param name="json">The complete array, number, Boolean, or string JSON root that both offer readers must reject.</param>
     [Theory]
     [InlineData("[]")]
     [InlineData("123")]
@@ -95,6 +111,7 @@ public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.Throws<System.Text.Json.JsonException>(() => Stj.Deserialize<UpsertJobOfferRequest>(json, Candidate()));
     }
 
+    /// <summary>Checks whole-null input and native handling of unrelated typed fields.</summary>
     [Fact]
     public void WholeNullAndUnrelatedTypedFieldsRetainNativeBehavior()
     {
@@ -117,6 +134,8 @@ public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, IT
         Assert.Equal("42", Stj.Deserialize<UpsertJobLevelRequest>("""{"Name":42}""", native)!.Name);
     }
 
+    /// <summary>Checks culture-independent parsing of offer numeric text.</summary>
+    /// <param name="culture">The en-US, th-TH, or fr-FR culture applied to both current culture settings while numeric lexeme preservation is checked.</param>
     [Theory]
     [InlineData("en-US")]
     [InlineData("th-TH")]
@@ -144,6 +163,7 @@ public sealed class CareerOfferRequestReaderTests(CareerRouteFixture fixture, IT
         }
     }
 
+    /// <summary>Checks that segmented offer numeric input is preserved without rounding.</summary>
     [Fact]
     public void NumericLexeme_CrossesInputSegmentsWithoutRounding()
     {

@@ -5,10 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks original paging cardinality against a thousand persisted offer rows.</summary>
+/// <param name="fixture">The shared lifecycle fixture providing isolated Career database setup and HTTP clients for paging assertions.</param>
 [Collection("Career shared level")]
 public sealed class CareerSourcePaginationCardinalityHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks omitted-size and page-edge results without changing the retained physical rows.</summary>
+    /// <param name="route">The original Jobs collection route spelling, including its casing and optional trailing slash, used for every paging request.</param>
+    /// <returns>A task that completes after all paging metadata, row cardinality, page-edge responses, and retained database rows have been asserted.</returns>
     [Theory]
     [InlineData("/Jobs")]
     [InlineData("/jobs/")]

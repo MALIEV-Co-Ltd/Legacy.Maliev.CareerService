@@ -1,7 +1,9 @@
 namespace Legacy.Maliev.CareerService.Tests.Workflows;
 
+/// <summary>Checks dependency updater scope and coordinated EF runtime updates.</summary>
 public sealed class DependabotConfigurationContractTests
 {
+    /// <summary>Checks that NuGet scanning covers only independently resolvable project directories.</summary>
     [Fact]
     public void NuGetUpdater_ScansOnlyIndependentlyResolvableProjectDirectories()
     {
@@ -21,6 +23,7 @@ public sealed class DependabotConfigurationContractTests
         Assert.Equal(3, source.Split("\n      - /Legacy.Maliev.CareerService.", StringSplitOptions.None).Length - 1);
     }
 
+    /// <summary>Checks coordinated EF and Npgsql packages in the runtime dependency graph.</summary>
     [Fact]
     public void NuGetUpdater_AllowsCoordinatedEfAndNpgsqlRuntimeGraph()
     {

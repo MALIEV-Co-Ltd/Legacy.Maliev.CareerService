@@ -10,12 +10,17 @@ using Xunit.Abstractions;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Compares original MVC body-reader behavior with native and candidate readers.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
+/// <param name="output">The xUnit output sink for recording source, native, and candidate comparison evidence.</param>
 [Collection("Career shared level")]
 public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, ITestOutputHelper output)
     : IClassFixture<CareerRouteFixture>
 {
     private const string LevelProjection = """["N","D"]""";
 
+    /// <summary>Provides explicit original, native, and candidate body-reader expectations.</summary>
+    /// <returns>Theory rows containing a scenario label, DTO selector, body text, original and native reader outcomes, and expected serialized projection.</returns>
     public static IEnumerable<object[]> Cases()
     {
         yield return ["standard", true, """{"Name":"N","Description":"D"}""", "success", "success", LevelProjection];
@@ -54,6 +59,14 @@ public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, IT
         yield return ["unexpected metadata exception", true, """{"$type":null}""", "throw:System.NullReferenceException", "success", "null"];
     }
 
+    /// <summary>Checks each reader against its independently stated expected outcome.</summary>
+    /// <param name="label">The scenario label included in comparison evidence written to the xUnit output.</param>
+    /// <param name="level">Whether to read a job-level body rather than a job-offer body.</param>
+    /// <param name="json">The complete request text supplied independently to the original, native, and candidate body readers.</param>
+    /// <param name="sourceKind">The expected original-reader result: success, failure, no-value, or a throw result naming its exception type.</param>
+    /// <param name="nativeKind">The independently expected native MVC reader outcome for the same request bytes.</param>
+    /// <param name="expectedProjection">The JSON array representation of the expected source and candidate model values when reading succeeds.</param>
+    /// <returns>A task that completes when all three readers satisfy their explicit outcomes and successful projections.</returns>
     [Theory]
     [MemberData(nameof(Cases))]
     public async Task ExactOfficialSourceNativeAndCandidate_KeepExplicitExpectedOutcomes(
@@ -79,6 +92,11 @@ public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, IT
         output.WriteLine("CAREER68 " + label + " SOURCE=" + source.Kind + " NATIVE=" + native.Kind + " CANDIDATE=" + candidate.Kind);
     }
 
+    /// <summary>Checks original depth limits even for skipped unknown data.</summary>
+    /// <param name="depth">The nesting depth of unknown JSON data, testing acceptance through 32 levels and rejection above that boundary.</param>
+    /// <param name="sourceKind">The expected original and candidate result, success or failure, at the requested depth.</param>
+    /// <param name="nativeKind">The expected native MVC result, success or failure, at the requested depth.</param>
+    /// <returns>A task that completes when original, native, and candidate depth-limit assertions finish.</returns>
     [Theory]
     [InlineData(31, "success", "success")]
     [InlineData(32, "success", "success")]
@@ -96,6 +114,11 @@ public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, IT
         Assert.Equal(sourceKind, candidate.Kind);
     }
 
+    /// <summary>Checks scoped media and charset selection and unsupported-type responses.</summary>
+    /// <param name="contentType">The request media type and optional charset used to select or reject the original and candidate input formatters.</param>
+    /// <param name="kind">The expected formatter result: success for supported JSON encodings, failure for unsupported charsets, or unsupported for XML.</param>
+    /// <param name="unicode">Whether to encode the body as UTF-16 little endian instead of UTF-8.</param>
+    /// <returns>A task that completes when media selection, charset failure classification, redaction, and successful model projection assertions finish.</returns>
     [Theory]
     [InlineData("application/json", "success", false)]
     [InlineData("text/json", "success", false)]
@@ -124,6 +147,7 @@ public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, IT
         if (kind == "success") Assert.Equal(CareerOriginalInputOracle.Projection(source.Model), CareerOriginalInputOracle.Projection(candidate.Model));
     }
 
+    /// <summary>Checks original MVC defaults rather than convenience JsonConvert settings.</summary>
     [Fact]
     public void OfficialDefaults_AreMvcDefaultsRatherThanJsonConvertConveniences()
     {
@@ -139,6 +163,8 @@ public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, IT
         Assert.Equal(30 * 1024, options.InputFormatterMemoryBufferThreshold);
     }
 
+    /// <summary>Checks per-read reference maps and recognized path prefixes and array indices.</summary>
+    /// <returns>A task that completes when per-read reference isolation and recognized prefixed collection-error paths are verified.</returns>
     [Fact]
     public async Task ReferenceMaps_ArePerReadAndRecognizedPathsKeepPrefixAndIndices()
     {
@@ -161,6 +187,8 @@ public sealed class CareerOriginalBodyReaderTests(CareerRouteFixture fixture, IT
         Assert.DoesNotContain(candidate.Messages, message => message.Contains("invalid-value-marker", StringComparison.Ordinal));
     }
 
+    /// <summary>Checks fixed attacker paths and bounded error accumulation.</summary>
+    /// <returns>A task that completes when unknown attacker paths use the fixed error key and model-state errors remain within the configured budget.</returns>
     [Fact]
     public async Task UnknownAttackerPaths_AreFixedAndErrorBudgetRemainsBounded()
     {

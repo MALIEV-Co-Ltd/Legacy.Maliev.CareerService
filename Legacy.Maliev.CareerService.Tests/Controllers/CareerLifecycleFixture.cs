@@ -24,6 +24,7 @@ namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
 // Actual Production auth/application/repository/PG18/Redis. Only remote IAM HTTP
 // is controlled; no deployed grant, source-data or provider-readiness claim.
+/// <summary>Owns disposable PostgreSQL, Redis, and controlled IAM resources for lifecycle acceptance.</summary>
 public sealed class CareerLifecycleFixture : IAsyncLifetime
 {
     private const string Issuer = "https://career-lifecycle.example.invalid";
@@ -33,22 +34,40 @@ public sealed class CareerLifecycleFixture : IAsyncLifetime
         .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
     private readonly RSA key = RSA.Create(2048);
     private readonly string liveCredential = Guid.NewGuid().ToString("N");
+    /// <summary>Gets the controlled permission decisions keyed by synthetic service principal.</summary>
     public ConcurrentDictionary<string, LifecycleAuthority> Authorities { get; } = new();
+    /// <summary>Gets the default production application factory for lifecycle tests.</summary>
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
+    /// <summary>Creates a context connected to the fixture-owned PostgreSQL container.</summary>
+    /// <returns>A new caller-owned Career database context connected to the fixture PostgreSQL container.</returns>
     public CareerDbContext Context() => new(new DbContextOptionsBuilder<CareerDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+    /// <summary>Starts fixture dependencies and creates the migrated Career database.</summary>
+    /// <returns>A task that completes after PostgreSQL and Redis start, database migrations run, and the default host factory is created.</returns>
     public async Task InitializeAsync()
     {
         await postgres.StartAsync(); await redis.StartAsync();
         await using var db = Context(); await db.Database.MigrateAsync();
         Factory = NewFactory();
     }
+    /// <summary>Removes test offers and levels and clears controlled authority state.</summary>
+    /// <returns>A task that completes after offers, levels, and recorded synthetic IAM authorities are cleared.</returns>
     public async Task ResetAsync()
     {
         await using var db = Context(); await db.Offers.ExecuteDeleteAsync(); await db.Levels.ExecuteDeleteAsync();
         Authorities.Clear();
     }
+    /// <summary>Creates an isolated host with optional IAM and save-interception controls.</summary>
+    /// <param name="iam">Whether the host registers the production IAM client backed by the controlled IAM HTTP transport.</param>
+    /// <param name="environment">The ASP.NET Core environment assigned to the isolated application host.</param>
+    /// <param name="schedule">The optional save barrier and failure controls installed as an EF Core interceptor; null leaves saves unintercepted.</param>
+    /// <returns>A caller-owned application factory configured with the fixture dependencies and requested host controls.</returns>
     public WebApplicationFactory<Program> NewFactory(bool iam = true, string environment = "Production", SaveSchedule? schedule = null) =>
         new LifecycleFactory(this, iam, environment, schedule);
+    /// <summary>Creates an anonymous or synthetic RS256-authenticated client for the selected host.</summary>
+    /// <param name="permission">The permission embedded in a synthetic RS256 token and registered with controlled IAM; null creates an anonymous client.</param>
+    /// <param name="decision">The controlled live IAM result for the synthetic principal: allow, deny, unavailable, or malformed.</param>
+    /// <param name="factory">The application factory to create the client from; null uses the fixture default factory.</param>
+    /// <returns>A caller-owned HTTP client with redirects disabled and, when requested, a synthetic signed bearer token.</returns>
     public HttpClient Client(string? permission = null, string decision = "allow", WebApplicationFactory<Program>? factory = null)
     {
         var client = (factory ?? Factory).CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -61,6 +80,8 @@ public sealed class CareerLifecycleFixture : IAsyncLifetime
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
         return client;
     }
+    /// <summary>Disposes the application factory, signing key, and fixture-owned containers.</summary>
+    /// <returns>A task that completes after the default host, signing key, Redis container, and PostgreSQL container are disposed.</returns>
     public async Task DisposeAsync()
     {
         if (Factory is not null) await Factory.DisposeAsync();
@@ -125,22 +146,37 @@ public sealed class CareerLifecycleFixture : IAsyncLifetime
     }
 }
 
+/// <summary>Stores a synthetic principal's permission, decision, and observed IAM call counts.</summary>
+/// <param name="permission">The permission identifier expected in IAM requests for this synthetic principal.</param>
+/// <param name="decision">The controlled live IAM outcome used to allow, deny, fail, or return malformed authorization responses.</param>
 public sealed class LifecycleAuthority(string permission, string decision)
 {
+    /// <summary>Gets the permission identifier expected by the controlled IAM transport.</summary>
     public string Permission { get; } = permission;
+    /// <summary>Gets the controlled live authorization decision.</summary>
     public string Decision { get; } = decision;
+    /// <summary>Counts all observed IAM permission requests.</summary>
     public int Calls;
+    /// <summary>Counts IAM requests that explicitly bypass the permission cache.</summary>
     public int LiveCalls;
 }
 
+/// <summary>Coordinates the first intercepted save and controlled concurrency or cancellation outcomes.</summary>
 public sealed class SaveSchedule
 {
+    /// <summary>Signals that the first save reached the interception barrier.</summary>
     public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>Releases the intercepted save so its test can control write ordering.</summary>
     public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>Signals that the intercepted save left its wait barrier.</summary>
     public TaskCompletionSource Exited { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>Counts intercepted save attempts.</summary>
     public int Saves;
+    /// <summary>Records whether cancellation interrupted the save barrier.</summary>
     public bool SawCallerCancellation;
+    /// <summary>Gets the controlled exception to throw after releasing the save barrier.</summary>
     public Exception? Failure { get; init; }
+    /// <summary>Gets the callback invoked when EF observes a concurrency failure.</summary>
     public Action? OnConcurrencyFailure { get; init; }
 }
 

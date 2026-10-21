@@ -7,12 +7,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Serializes tests that mutate shared levels.</summary>
 [CollectionDefinition("Career shared level", DisableParallelization = true)]
 public sealed class CareerSharedLevelCollection;
 
+/// <summary>Checks level mutation boundaries and the resulting public offer projections.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, and signed-client fixture used for the HTTP assertions.</param>
 [Collection("Career shared level")]
 public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks that source write whitelists ignore forged identifiers, dates, and nested graphs.</summary>
+    /// <param name="kind">The mutation resource: offer selects job-offer payloads and routes; level selects job-level payloads and routes.</param>
+    /// <param name="value">The literal text, including an empty string, padded spaces, or Thai characters, applied to source-writable fields.</param>
+    /// <returns>A task that completes after checking that source write whitelists ignore forged identifiers, dates, and nested graphs.</returns>
     [Theory]
     [InlineData("offer", "")]
     [InlineData("offer", "  Literal value  ")]
@@ -178,6 +185,10 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         Assert.False(await db.Levels.AnyAsync(item => item.Id == forgedId));
     }
 
+    /// <summary>Checks that shared-level edits refresh public reads without changing imported offer fields.</summary>
+    /// <param name="name">The literal replacement shared-level name, including an empty string, significant surrounding spaces, or Thai text.</param>
+    /// <param name="description">The literal replacement shared-level description expected in subsequent public offer and level reads.</param>
+    /// <returns>A task that completes after checking that shared-level edits refresh public reads without changing imported offer fields.</returns>
     [Theory]
     [InlineData("", "")]
     [InlineData("  Literal level  ", "  Literal description  ")]
@@ -235,6 +246,10 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         Assert.Equal(offersBefore, await OffersAsync());
     }
 
+    /// <summary>Checks private failure of missing required level fields without changing either offer.</summary>
+    /// <param name="name">The submitted shared-level name, set to null in cases exercising its required database constraint.</param>
+    /// <param name="description">The submitted shared-level description, set to null in cases exercising its required database constraint.</param>
+    /// <returns>A task that completes after checking private failure of missing required level fields without changing either offer.</returns>
     [Theory]
     [InlineData(null, "Valid description")]
     [InlineData("Valid name", null)]
@@ -263,6 +278,10 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
             AssertLevelFields(item.GetProperty("level"), "Original level", "Original description");
     }
 
+    /// <summary>Checks that invalid authority cannot alter a shared level or its public offers.</summary>
+    /// <param name="authority">The rejected client authority scenario: anonymous, expired, wrong-signature, or missing-permission.</param>
+    /// <param name="expected">The expected unauthorized or forbidden response for the selected authority failure.</param>
+    /// <returns>A task that completes after checking that invalid authority cannot alter a shared level or its public offers.</returns>
     [Theory]
     [InlineData("anonymous", HttpStatusCode.Unauthorized)]
     [InlineData("expired", HttpStatusCode.Unauthorized)]
@@ -285,6 +304,9 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
             Assert.Equal("Original level", item.GetProperty("level").GetProperty("name").GetString());
     }
 
+    /// <summary>Checks that invalid level bodies preserve all related persisted rows.</summary>
+    /// <param name="body">The raw JSON update body: null, malformed JSON, or a numeric name value used to test validation and persistence failure behavior.</param>
+    /// <returns>A task that completes after checking that invalid level bodies preserve all related persisted rows.</returns>
     [Theory]
     [InlineData("null")]
     [InlineData("{")]

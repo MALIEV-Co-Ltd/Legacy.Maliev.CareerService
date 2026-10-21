@@ -10,10 +10,15 @@ using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks the served schema for the adapted level request.</summary>
+/// <param name="fixture">The shared route fixture used to create adapted and native development hosts serving the level request OpenAPI schema.</param>
+/// <param name="output">The test output sink that records the native and adapted canonical level schemas for comparison.</param>
 [Collection("Career shared level")]
 public sealed class CareerLevelOpenApiTests(CareerRouteFixture fixture, ITestOutputHelper output)
     : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks level request names, required properties, and nullability in actual OpenAPI output.</summary>
+    /// <returns>A task that completes after asserting that the served adapted level request schema matches native property names, requiredness, nullability, and schema metadata.</returns>
     [Fact]
     public async Task ActualDocument_PreservesNamedLevelRequestPropertiesRequirednessAndNullability()
     {

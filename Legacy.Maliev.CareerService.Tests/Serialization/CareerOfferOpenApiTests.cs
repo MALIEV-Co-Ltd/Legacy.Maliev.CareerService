@@ -10,10 +10,15 @@ using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks the served schema for the adapted offer request.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
+/// <param name="output">The xUnit output sink for recording source, native, and candidate comparison evidence.</param>
 [Collection("Career shared level")]
 public sealed class CareerOfferOpenApiTests(CareerRouteFixture fixture, ITestOutputHelper output)
     : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks offer request names, required properties, and nullability in actual OpenAPI output.</summary>
+    /// <returns>A task that completes when the actual candidate offer request schema matches the native schema, including property names, requiredness, and nullability.</returns>
     [Fact]
     public async Task ActualDocument_PreservesNamedOfferRequestPropertiesRequirednessAndNullability()
     {

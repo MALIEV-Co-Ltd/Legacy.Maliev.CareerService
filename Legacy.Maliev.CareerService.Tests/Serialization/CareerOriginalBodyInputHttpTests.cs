@@ -12,6 +12,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks original JSON grammar and graph validation through the complete HTTP pipeline.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
 [Collection("Career shared level")]
 public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
@@ -19,6 +21,8 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
     private const string Marker = "private-input-marker";
     private const string Title = "ช่าง Fixture 🔧";
 
+    /// <summary>Provides accepted grammar variants and ignored-graph bodies.</summary>
+    /// <returns>Theory rows combining offer or level writes, create or update mode, and each accepted original JSON grammar or UTF-16 variant.</returns>
     public static IEnumerable<object[]> AcceptedBodies()
     {
         foreach (var kind in new[] { "offer", "level" })
@@ -33,6 +37,11 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
         }
     }
 
+    /// <summary>Checks original grammar, write whitelists, and public readback.</summary>
+    /// <param name="kind">The resource to write: offer at /Jobs or level at /jobs/levels.</param>
+    /// <param name="update">Whether to PUT the seeded record rather than POST a new record.</param>
+    /// <param name="grammar">The accepted body variant: single-quotes, unquoted-names, comments, trailing-comma, second-object, trailing-garbage, or utf16.</param>
+    /// <returns>A task that completes when write status, persisted whitelist values, ignored graph data, timestamps, and public readback assertions finish.</returns>
     [Theory]
     [MemberData(nameof(AcceptedBodies))]
     public async Task OriginalGrammarAndIgnoredGraph_PreserveWhitelistAndPublicReads(string kind, bool update, string grammar)
@@ -170,6 +179,8 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
         Assert.Equal(kind == "offer" ? "true" : "false", await reader.GetStringAsync("/Jobs/job-opening-status"));
     }
 
+    /// <summary>Provides malformed recognized-graph cases.</summary>
+    /// <returns>Theory rows containing the resource, create/update/missing mode, malformed recognized graph member, and expected validation-error path.</returns>
     public static IEnumerable<object[]> InvalidGraphs()
     {
         foreach (var mode in new[] { "create", "update", "missing" })
@@ -183,6 +194,12 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
         }
     }
 
+    /// <summary>Checks that later values or missing records cannot hide an earlier invalid graph.</summary>
+    /// <param name="kind">The resource receiving the malformed graph: offer at /Jobs or level at /jobs/levels.</param>
+    /// <param name="mode">The route scenario: create with POST, update the seeded record with PUT, or PUT a missing identifier.</param>
+    /// <param name="invalidMember">The raw JSON member fragment containing an invalid nested Level or Offers value, inserted before the otherwise valid payload.</param>
+    /// <param name="path">The recognized validation-error member path, including nested property names and collection indices.</param>
+    /// <returns>A task that completes when the 400 response, preserved recognized path, redaction, and unchanged database graph assertions finish.</returns>
     [Theory]
     [MemberData(nameof(InvalidGraphs))]
     public async Task InvalidEarlierGraph_CannotBeHiddenByLaterValidOccurrenceOrMissingLookup(string kind, string mode, string invalidMember, string path)
@@ -203,6 +220,8 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
         Assert.Equal(before, await Graph());
     }
 
+    /// <summary>Provides routes for input-refusal boundary scenarios.</summary>
+    /// <returns>Theory rows pairing offer or level routes with create, update, and missing-record write scenarios.</returns>
     public static IEnumerable<object[]> RefusalRoutes()
     {
         foreach (var kind in new[] { "offer", "level" })
@@ -214,6 +233,10 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
         }
     }
 
+    /// <summary>Checks unsupported charset rejection without payload or charset disclosure to loggers.</summary>
+    /// <param name="kind">The resource route under test: offer at /Jobs or level at /jobs/levels.</param>
+    /// <param name="mode">The write scenario: POST create, PUT an existing record, or PUT a missing identifier.</param>
+    /// <returns>A task that completes when unsupported charset input returns 415 without response or log disclosure and leaves the database unchanged.</returns>
     [Theory]
     [MemberData(nameof(RefusalRoutes))]
     public async Task UnsupportedCharset_Retains415WithoutEchoingCharsetOrPayloadToAnyLogger(string kind, string mode)
@@ -241,6 +264,10 @@ public sealed class CareerOriginalBodyInputHttpTests(CareerRouteFixture fixture)
         });
     }
 
+    /// <summary>Checks fixed malformed-input error keys without echoing attacker-controlled member names.</summary>
+    /// <param name="kind">The resource route under test: offer at /Jobs or level at /jobs/levels.</param>
+    /// <param name="mode">The write scenario: POST create, PUT an existing record, or PUT a missing identifier.</param>
+    /// <returns>A task that completes when malformed unknown input returns 400 under the fixed $ error key without leaking the attacker key or changing stored data.</returns>
     [Theory]
     [MemberData(nameof(RefusalRoutes))]
     public async Task MalformedUnknownMember_UsesFixedErrorKeyWithoutEchoingAttackerKeyInBodyOrLogs(string kind, string mode)

@@ -7,9 +7,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks consumed level fields through the normal HTTP input pipeline.</summary>
+/// <param name="fixture">The shared route fixture providing Career database reset, entity contexts, and permission-bearing HTTP clients for level input tests.</param>
 [Collection("Career shared level")]
 public sealed class CareerLevelInputHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks persisted level projections and refreshed public reads.</summary>
+    /// <param name="update">Whether to update the seeded level with PUT instead of creating a level with POST.</param>
+    /// <param name="body">The level request JSON containing repeated, null, numeric, or boolean consumed fields whose source-compatible projection is exercised.</param>
+    /// <param name="name">The expected projected level name in persisted rows and applicable HTTP responses.</param>
+    /// <param name="description">The expected projected level description in persisted rows and applicable HTTP responses.</param>
+    /// <returns>A task that completes after asserting persisted level values, timestamps, refreshed public reads, and preservation of unaffected graph rows.</returns>
     [Theory]
     [InlineData(false, """{"Name":"N","Name":null,"Description":true}""", "N", "true")]
     [InlineData(true, """{"Name":"N","Name":null,"Description":true}""", "N", "true")]
@@ -75,6 +83,9 @@ public sealed class CareerLevelInputHttpTests(CareerRouteFixture fixture) : ICla
         Assert.Equal(offersBefore, await Offers());
     }
 
+    /// <summary>Checks that malformed consumed values fail before any graph write.</summary>
+    /// <param name="body">The level update JSON containing an object or array in a consumed field, including malformed occurrences before later valid text.</param>
+    /// <returns>A task that completes after asserting a sanitized bad-request response and an unchanged offer-and-level database snapshot.</returns>
     [Theory]
     [InlineData("""{"Name":{"private-input-marker":1},"Description":"D"}""")]
     [InlineData("""{"Name":"N","Description":[]}""")]

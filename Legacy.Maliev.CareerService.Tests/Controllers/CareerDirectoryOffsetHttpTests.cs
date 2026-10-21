@@ -12,10 +12,17 @@ using Moq;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks directory page boundaries against persisted offers and shared levels.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, production host, and controlled IAM fixture used for the HTTP assertions.</param>
 [Collection("Career shared level")]
 public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks that exhausted pages return 404 without offset wrapping or changing stored rows.</summary>
+    /// <param name="index">The one-based page index beyond the available offer pages, including values that can overflow a 32-bit offset.</param>
+    /// <param name="size">The requested page size combined with the index to exercise exhausted-page and offset-overflow boundaries.</param>
+    /// <param name="sort">The numeric offer identifier sort: 0 for ascending or 1 for descending.</param>
+    /// <returns>A task that completes after checking that exhausted pages return 404 without offset wrapping or changing stored rows.</returns>
     [Theory]
     [InlineData(1073741825, 4, 0)]
     [InlineData(1073741825, 4, 1)]
@@ -106,6 +113,10 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         Assert.Equal(before, await SnapshotAsync(cancellation));
     }
 
+    /// <summary>Checks the original zero-size 404 result after normal service execution.</summary>
+    /// <param name="index">The requested page index used with an explicit page size of zero.</param>
+    /// <param name="populated">Whether to seed offers and a shared level before verifying the zero-size response.</param>
+    /// <returns>A task that completes after checking the original zero-size 404 result after normal service execution.</returns>
     [Theory]
     [InlineData(0, true)]
     [InlineData(1, true)]
@@ -151,6 +162,9 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         Assert.Empty(fixture.Authorities);
     }
 
+    /// <summary>Checks that zero-size handling preserves query model-binding errors.</summary>
+    /// <param name="query">The query string containing an invalid index, sort, or size value whose binding failure must remain a bad request.</param>
+    /// <returns>A task that completes after checking that zero-size handling preserves query model-binding errors.</returns>
     [Theory]
     [InlineData("?size=0&index=not-an-index")]
     [InlineData("?size=0&sort=not-a-sort")]
@@ -170,6 +184,9 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         await AssertZeroSizeCacheAsync(cache, token);
     }
 
+    /// <summary>Checks that omitted and positive sizes retain anonymous filtered paging contracts.</summary>
+    /// <param name="size">The size query value; null omits the parameter to request the default page, while 1 requests a single offer.</param>
+    /// <returns>A task that completes after checking that omitted and positive sizes retain anonymous filtered paging contracts.</returns>
     [Theory]
     [InlineData(null)]
     [InlineData("1")]
@@ -199,6 +216,8 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         Assert.Empty(fixture.Authorities);
     }
 
+    /// <summary>Checks exact argument and cancellation forwarding before zero-size requests return 404.</summary>
+    /// <returns>A task that completes after checking exact argument and cancellation forwarding before zero-size requests return 404.</returns>
     [Fact]
     public async Task ExplicitZeroSize_ForwardsOriginalArgumentsAndCancellationBeforeReturningNotFound()
     {
@@ -220,6 +239,8 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         service.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks that a zero-size request propagates the original service failure.</summary>
+    /// <returns>A task that completes after checking that a zero-size request propagates the original service failure.</returns>
     [Fact]
     public async Task ExplicitZeroSize_DoesNotReplaceServiceFailureWithNotFound()
     {
@@ -236,6 +257,8 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         service.VerifyNoOtherCalls();
     }
 
+    /// <summary>Checks that a zero-size request preserves caller cancellation.</summary>
+    /// <returns>A task that completes after checking that a zero-size request preserves caller cancellation.</returns>
     [Fact]
     public async Task ExplicitZeroSize_DoesNotReplaceCallerCancellationWithNotFound()
     {

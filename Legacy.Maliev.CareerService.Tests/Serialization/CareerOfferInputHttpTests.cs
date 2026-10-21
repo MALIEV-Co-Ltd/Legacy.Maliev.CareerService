@@ -7,9 +7,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks source offer-field projection through the normal HTTP input pipeline.</summary>
+/// <param name="fixture">The shared route fixture providing Career database reset, entity contexts, and permission-bearing HTTP clients for offer input tests.</param>
 [Collection("Career shared level")]
 public sealed class CareerOfferInputHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks that only consumed offer fields are persisted.</summary>
+    /// <param name="update">Whether to update the selected seeded offer with PUT instead of creating an offer with POST.</param>
+    /// <param name="fields">The JSON object containing consumed offer fields and repeated scalar or null occurrences, extended with the level identifier and ignored fields before submission.</param>
+    /// <param name="title">The expected source-compatible title text in the persisted offer and HTTP responses.</param>
+    /// <param name="description">The expected source-compatible description text in the persisted offer and HTTP responses.</param>
+    /// <param name="prerequisites">The expected source-compatible prerequisites text in the persisted offer and HTTP responses.</param>
+    /// <returns>A task that completes after asserting consumed offer projections, timestamp behavior, refreshed public reads, and preservation of ignored fields and unaffected graph rows.</returns>
     [Theory]
     [InlineData(false, """{"Title":1.2300e+02,"Description":true,"Prerequisites":"P","Prerequisites":null}""", "1.2300e+02", "true", "P")]
     [InlineData(true, """{"Title":1.2300e+02,"Description":true,"Prerequisites":"P","Prerequisites":null}""", "1.2300e+02", "true", "P")]
@@ -82,6 +91,10 @@ public sealed class CareerOfferInputHttpTests(CareerRouteFixture fixture) : ICla
         AssertFields(listed, title, description, prerequisites);
     }
 
+    /// <summary>Checks that an earlier invalid consumed container prevents every graph write.</summary>
+    /// <param name="update">Whether to exercise the offer update endpoint with PUT instead of the creation endpoint with POST.</param>
+    /// <param name="field">The consumed offer field, Title, Description, or Prerequisites, given an earlier object value followed by valid text.</param>
+    /// <returns>A task that completes after asserting a sanitized bad-request response and an unchanged offer-and-level database graph.</returns>
     [Theory]
     [InlineData(false, "Title")]
     [InlineData(true, "Title")]

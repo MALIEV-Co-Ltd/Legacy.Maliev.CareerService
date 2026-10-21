@@ -2,8 +2,12 @@ using System.Xml.Linq;
 
 namespace Legacy.Maliev.CareerService.Tests.Documentation;
 
+/// <summary>Checks compiler-produced XML documentation and its isolation from project source roots.</summary>
 public sealed class CareerGeneratedDocumentationIsolationTests
 {
+    /// <summary>Checks actual assembly documentation, a meaningful member summary, and source-root isolation.</summary>
+    /// <param name="assemblyName">The Career assembly name used to locate its compiler-generated XML file in build output and check that no matching XML file exists in its project source root.</param>
+    /// <param name="documentedMember">The XML documentation member identifier to locate in that assembly file and verify has a nonblank summary.</param>
     [Theory]
     [InlineData("Legacy.Maliev.CareerService.Api", "T:Program")]
     [InlineData("Legacy.Maliev.CareerService.Application", "T:Legacy.Maliev.CareerService.Application.Interfaces.ICareerService")]

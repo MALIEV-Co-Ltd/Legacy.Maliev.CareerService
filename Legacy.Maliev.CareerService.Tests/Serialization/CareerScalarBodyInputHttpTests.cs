@@ -7,9 +7,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks original recognized scalar validation through normal offer and level HTTP writes.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
 [Collection("Career shared level")]
 public sealed class CareerScalarBodyInputHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Provides accepted offer scalar representations and expected nullable filled states.</summary>
+    /// <returns>Theory rows combining create/update mode, raw IsFilled member text including duplicate nulls, and the expected nullable Boolean projection.</returns>
     public static IEnumerable<object[]> ValidOfferScalars()
     {
         foreach (var update in new[] { false, true })
@@ -25,6 +29,11 @@ public sealed class CareerScalarBodyInputHttpTests(CareerRouteFixture fixture) :
         }
     }
 
+    /// <summary>Checks persisted scalar values without writing ignored fields.</summary>
+    /// <param name="update">Whether to PUT the seeded offer rather than POST a new offer.</param>
+    /// <param name="token">The raw IsFilled JSON value, optionally followed by a duplicate IsFilled null member.</param>
+    /// <param name="filled">The nullable Boolean expected after source-compatible scalar conversion and persistence.</param>
+    /// <returns>A task that completes when offer scalar persistence, ignored-field preservation, response status, and public readback assertions finish.</returns>
     [Theory]
     [MemberData(nameof(ValidOfferScalars))]
     public async Task OfferScalars_PersistSourceValuesWithoutWritingIgnoredFields(bool update, string token, bool? filled)
@@ -92,6 +101,9 @@ public sealed class CareerScalarBodyInputHttpTests(CareerRouteFixture fixture) :
         Assert.Equal(filled == false ? "true" : "false", await reader.GetStringAsync("/Jobs/job-opening-status"));
     }
 
+    /// <summary>Checks recognized level scalars without replacing identity or server timestamps.</summary>
+    /// <param name="update">Whether to PUT the existing level rather than POST a new level.</param>
+    /// <returns>A task that completes when level writes retain server-controlled identity and timestamps while ignoring recognized scalar input fields.</returns>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -138,6 +150,8 @@ public sealed class CareerScalarBodyInputHttpTests(CareerRouteFixture fixture) :
         Assert.Equal("D", detail.RootElement.GetProperty("description").GetString());
     }
 
+    /// <summary>Provides invalid recognized scalar field representations.</summary>
+    /// <returns>Theory rows containing offer or level routes, create/update/missing mode, a recognized scalar property, and an invalid raw JSON value.</returns>
     public static IEnumerable<object[]> InvalidRecognizedFields()
     {
         foreach (var kind in new[] { "offer", "level" })
@@ -154,6 +168,12 @@ public sealed class CareerScalarBodyInputHttpTests(CareerRouteFixture fixture) :
             }
     }
 
+    /// <summary>Checks that earlier invalid scalars fail before lookup or writes.</summary>
+    /// <param name="kind">The resource receiving the invalid scalar: offer at /Jobs or level at /jobs/levels.</param>
+    /// <param name="mode">The operation scenario: POST create, PUT the seeded record, or PUT a missing identifier.</param>
+    /// <param name="field">The recognized scalar property whose first invalid occurrence precedes a later valid replacement.</param>
+    /// <param name="token">The invalid raw JSON value inserted for that property, including malformed identity, date, Boolean, or text representations.</param>
+    /// <returns>A task that completes when the earlier invalid scalar returns 400 before lookup or writes, without leaking input values.</returns>
     [Theory]
     [MemberData(nameof(InvalidRecognizedFields))]
     public async Task EarlierInvalidKnownScalar_RejectsBeforeExistingOrMissingLookupAndWrites(string kind, string mode, string field, string token)
@@ -182,6 +202,10 @@ public sealed class CareerScalarBodyInputHttpTests(CareerRouteFixture fixture) :
         Assert.Equal(before, await Graph());
     }
 
+    /// <summary>Checks that omitted zero level identifiers retain foreign-key failure or missing-record 404.</summary>
+    /// <param name="mode">The offer write scenario: create, update the seeded offer, or update a missing offer.</param>
+    /// <param name="fields">The optional appended LevelId JSON member, omitted entirely or represented by null or an empty string, to retain the default zero identifier.</param>
+    /// <returns>A task that completes when default-zero level input produces the expected foreign-key 500 or missing-offer 404 without changing stored data.</returns>
     [Theory]
     [InlineData("create", "")]
     [InlineData("create", ",\"LevelId\":null")]

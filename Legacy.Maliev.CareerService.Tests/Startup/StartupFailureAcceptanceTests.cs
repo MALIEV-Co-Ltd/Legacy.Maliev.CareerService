@@ -7,14 +7,19 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Legacy.Maliev.CareerService.Tests.Startup;
 
+/// <summary>Serializes tests that execute and intercept the Career entrypoint.</summary>
 [CollectionDefinition("Career startup state", DisableParallelization = true)]
 public sealed class StartupCollection;
 
+/// <summary>Checks actual entrypoint failures and normal host-abort behavior.</summary>
 [Collection("Career startup state")]
 public sealed class StartupFailureAcceptanceTests
 {
     private const string Sentinel = "private-startup-test-sentinel";
 
+    /// <summary>Checks private failure reporting and exit code one for each startup phase.</summary>
+    /// <param name="phase">The startup failure scenario: malformed configuration, a missing content root, or an invalid host-start URL.</param>
+    /// <returns>A task that completes when the actual API entrypoint reports a redacted private startup failure, exits with code one, and its owned child process is released.</returns>
     [Theory]
     [InlineData("malformed")]
     [InlineData("missing-root")]
@@ -108,6 +113,8 @@ public sealed class StartupFailureAcceptanceTests
             ["Observability:RuntimeMetricsEnabled"] = "false"
         };
     }
+    /// <summary>Checks that a normal production host remains interceptable and preserves its exit code.</summary>
+    /// <returns>A task that completes when the normal production host remains interceptable, serves liveness, protects writes, and preserves the existing exit code.</returns>
     [Fact]
     public async Task Normal_production_host_remains_interceptable_and_preserves_exit_code()
     {
@@ -137,6 +144,8 @@ public sealed class StartupFailureAcceptanceTests
         }
         finally { Environment.ExitCode = previous; }
     }
+    /// <summary>Checks that host abort is rethrown without private failure emission or exit-code mutation.</summary>
+    /// <returns>A task that completes when entrypoint host abort is rethrown without private startup failure output or exit-code changes.</returns>
     [Fact]
     public async Task Actual_entrypoint_rethrows_host_abort_without_emitting_private_failure_or_changing_exit_code()
     {

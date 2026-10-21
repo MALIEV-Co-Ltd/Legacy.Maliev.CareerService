@@ -69,9 +69,12 @@ internal static class CareerLevelNativeOptions
     }
 }
 
+/// <summary>Checks that the level input adapter preserves unrelated serializer configuration.</summary>
+/// <param name="fixture">The shared route fixture supplying the host serializer configuration used to reconstruct native MVC options without the level adapter.</param>
 [Collection("Career shared level")]
 public sealed class CareerLevelNativeOptionsTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks fresh factories for foreign converter order, names, postconfiguration, and validators.</summary>
     [Fact]
     public void FreshFactory_PreservesForeignOrderNamesPostConfigurationsAndValidators()
     {
