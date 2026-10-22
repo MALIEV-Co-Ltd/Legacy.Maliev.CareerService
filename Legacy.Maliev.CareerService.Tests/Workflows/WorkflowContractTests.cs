@@ -110,7 +110,7 @@ public sealed class WorkflowContractTests
         var reference = Assert.Single(project.Descendants("PackageReference"),
             element => (string?)element.Attribute("Include") == "Microsoft.EntityFrameworkCore.Design");
         Assert.Equal("'$(EnableCareerScaffoldDesignTime)' == 'true'", reference.Attribute("Condition")?.Value);
-        Assert.Equal("10.0.12", reference.Attribute("Version")?.Value);
+        Assert.Equal("10.0.13", reference.Attribute("Version")?.Value);
         Assert.Equal("all", reference.Element("PrivateAssets")?.Value);
         Assert.Contains("Microsoft.EntityFrameworkCore.Design", DataProject, StringComparison.Ordinal);
     }
