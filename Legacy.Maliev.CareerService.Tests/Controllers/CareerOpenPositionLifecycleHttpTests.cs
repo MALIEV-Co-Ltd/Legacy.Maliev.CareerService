@@ -5,12 +5,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Serializes tests that share the public open-position lifecycle fixture.</summary>
 [CollectionDefinition("Career open position lifecycle", DisableParallelization = true)]
 public sealed class CareerOpenPositionLifecycleCollection;
 
+/// <summary>Checks nullable filled-state transitions and their public homepage result.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, and signed-client fixture used for the HTTP assertions.</param>
 [Collection("Career open position lifecycle")]
 public sealed class CareerOpenPositionLifecycleHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks creation with each nullable filled state and the anonymous open-position boolean.</summary>
+    /// <param name="filled">The nullable IsFilled value submitted when creating the offer; only false must produce a true public open-position result.</param>
+    /// <returns>A task that completes after checking creation with each nullable filled state and the anonymous open-position boolean.</returns>
     [Theory]
     [InlineData(null)]
     [InlineData(false)]
@@ -33,6 +39,10 @@ public sealed class CareerOpenPositionLifecycleHttpTests(CareerRouteFixture fixt
         await AssertPublicStateAsync(id, filled);
     }
 
+    /// <summary>Checks that filled-state updates preserve creation time and refresh public reads.</summary>
+    /// <param name="initial">The nullable IsFilled value persisted before the update.</param>
+    /// <param name="next">The nullable IsFilled value submitted by the authorized update and expected in subsequent public reads.</param>
+    /// <returns>A task that completes after checking that filled-state updates preserve creation time and refresh public reads.</returns>
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -67,6 +77,10 @@ public sealed class CareerOpenPositionLifecycleHttpTests(CareerRouteFixture fixt
         await AssertPublicStateAsync(before.Id, next);
     }
 
+    /// <summary>Checks that invalid update authority cannot change stored offers or the homepage boolean.</summary>
+    /// <param name="authority">The rejected client authority scenario: anonymous, expired, wrong-signature, or missing-permission.</param>
+    /// <param name="expected">The expected rejection status: unauthorized for invalid authentication or forbidden for a missing update permission.</param>
+    /// <returns>A task that completes after checking that invalid update authority cannot change stored offers or the homepage boolean.</returns>
     [Theory]
     [InlineData("anonymous", HttpStatusCode.Unauthorized)]
     [InlineData("expired", HttpStatusCode.Unauthorized)]

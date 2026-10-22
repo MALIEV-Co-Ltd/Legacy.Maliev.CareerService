@@ -6,6 +6,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace Legacy.Maliev.CareerService.Tests.Workflows;
 
+/// <summary>Checks the existing build, dependency, security, and evidence workflow boundaries.</summary>
 public sealed class WorkflowContractTests
 {
     private static readonly string Workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "_build-and-test.yml"));
@@ -14,12 +15,15 @@ public sealed class WorkflowContractTests
     private static readonly string DataProject = File.ReadAllText(
         FindRepositoryFile("Legacy.Maliev.CareerService.Data", "Legacy.Maliev.CareerService.Data.csproj"));
 
+    /// <summary>Checks the maintained build-and-test structural contract.</summary>
     [Fact]
     public void BuildAndTest_SatisfiesStructuralContract()
     {
         WorkflowContractValidator.Validate(Workflow);
     }
 
+    /// <summary>Checks rejection of an unreviewed artifact-upload action pin.</summary>
+    /// <param name="replacement">The unreviewed actions/upload-artifact reference substituted for the approved immutable action pin.</param>
     [Theory]
     [InlineData("actions/upload-artifact@v7.0.1")]
     [InlineData("actions/upload-artifact@main # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a")]
@@ -30,6 +34,9 @@ public sealed class WorkflowContractTests
         AssertMutationRejected("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", replacement);
     }
 
+    /// <summary>Checks rejection of missing or disabled artifact ZIP archiving.</summary>
+    /// <param name="original">The enabled archive YAML line located in the existing evidence-upload step.</param>
+    /// <param name="replacement">The disabled archive line or empty text substituted to verify rejection of non-ZIP evidence uploads.</param>
     [Theory]
     [InlineData("          archive: true", "          archive: false")]
     [InlineData("          archive: true", "")]
@@ -38,6 +45,9 @@ public sealed class WorkflowContractTests
         AssertMutationRejected(original, replacement);
     }
 
+    /// <summary>Checks rejection of changes to the scaffold guard boundary.</summary>
+    /// <param name="original">The reviewed scaffold-guard shell, script path, or evidence-output path located in the workflow.</param>
+    /// <param name="replacement">The altered shell, script path, or evidence destination that the structural contract must reject.</param>
     [Theory]
     [InlineData("shell: pwsh", "shell: bash")]
     [InlineData("./tooling/Test-CareerScaffoldContract.ps1", "./tooling/UnreviewedScaffold.ps1")]
@@ -47,6 +57,7 @@ public sealed class WorkflowContractTests
         AssertMutationRejected(original, replacement);
     }
 
+    /// <summary>Checks that a comment pin cannot authorize a shared action's main branch.</summary>
     [Fact]
     public void BuildAndTest_RejectsSharedActionMainWithPinnedShaComment()
     {
@@ -55,6 +66,7 @@ public sealed class WorkflowContractTests
             "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@main # e3a6093324a24968876782153286f52db8b29fd8");
     }
 
+    /// <summary>Checks that commented dependency hashes do not satisfy checkout pinning.</summary>
     [Fact]
     public void BuildAndTest_RejectsCommentedDependencySha()
     {
@@ -63,6 +75,7 @@ public sealed class WorkflowContractTests
             "ref: main # c40a7f82cea347b949444dcd7fb730f2b8dc3c0e");
     }
 
+    /// <summary>Checks that the API references only the legacy ServiceDefaults project.</summary>
     [Fact]
     public void ApiProject_UsesOnlyLegacyServiceDefaults()
     {
@@ -71,6 +84,7 @@ public sealed class WorkflowContractTests
         Assert.DoesNotContain("Include=\"Maliev.Aspire.ServiceDefaults\"", ApiProject, StringComparison.Ordinal);
     }
 
+    /// <summary>Checks shared failure middleware without introducing a local exception handler.</summary>
     [Fact]
     public void SourceF064_UsesSharedFailureMiddlewareWithoutLocalExceptionHandler()
     {
@@ -85,6 +99,7 @@ public sealed class WorkflowContractTests
             StringComparison.Ordinal);
     }
 
+    /// <summary>Checks that EF design dependencies belong only to the Data project.</summary>
     [Fact]
     public void EfDesignDependency_IsOwnedByDataProjectOnly()
     {
@@ -100,6 +115,7 @@ public sealed class WorkflowContractTests
         Assert.Contains("Microsoft.EntityFrameworkCore.Design", DataProject, StringComparison.Ordinal);
     }
 
+    /// <summary>Checks rejection of job-level permission escalation.</summary>
     [Fact]
     public void BuildAndTest_RejectsJobPermissionEscalation()
     {
@@ -108,6 +124,7 @@ public sealed class WorkflowContractTests
             "  validate:\n    permissions:\n      contents: write\n    name: validate");
     }
 
+    /// <summary>Checks rejection of secret references throughout the workflow.</summary>
     [Fact]
     public void BuildAndTest_RejectsSecretReferenceAnywhere()
     {
@@ -116,6 +133,8 @@ public sealed class WorkflowContractTests
         Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(mutated));
     }
 
+    /// <summary>Checks rejection of secret expressions in job environment values.</summary>
+    /// <param name="expression">The dotted or bracketed GitHub secrets expression injected into the validate job environment to verify rejection.</param>
     [Theory]
     [InlineData("${{secrets.X}}")]
     [InlineData("${{ secrets['X'] }}")]
@@ -126,6 +145,7 @@ public sealed class WorkflowContractTests
             $"    env:\n      MalievWorkspaceRoot: ${{{{ github.workspace }}}}/.dependencies\n      REVIEW_TOKEN: {expression}");
     }
 
+    /// <summary>Checks rejection of restore commands obscured with whitespace.</summary>
     [Fact]
     public void BuildAndTest_RejectsWhitespaceObfuscatedRestoreCommand()
     {
@@ -134,6 +154,7 @@ public sealed class WorkflowContractTests
             "          solution: Legacy.Maliev.CareerService.slnx\n      - run: dotnet  restore Legacy.Maliev.CareerService.slnx");
     }
 
+    /// <summary>Checks rejection of missing local dependency opt-in.</summary>
     [Fact]
     public void BuildAndTest_RejectsMissingLocalDependencyOptIn()
     {
@@ -142,6 +163,7 @@ public sealed class WorkflowContractTests
             string.Empty);
     }
 
+    /// <summary>Checks rejection of reserved GitHub Actions environment overrides.</summary>
     [Fact]
     public void BuildAndTest_RejectsReservedGitHubActionsOverride()
     {

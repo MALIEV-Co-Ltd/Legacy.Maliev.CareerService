@@ -9,13 +9,19 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Serializes production dependency-failure health tests.</summary>
 [CollectionDefinition("Career unhealthy readiness", DisableParallelization = true)]
 public sealed class CareerUnhealthyReadinessHttpTestsCollection;
 
+/// <summary>Checks sanitized readiness failures while the process remains live.</summary>
+/// <param name="fixture">The lifecycle fixture used to create a production host with a controlled failing readiness dependency.</param>
 [Collection("Career unhealthy readiness")]
 public sealed class CareerUnhealthyReadinessHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks anonymous 503 readiness responses and healthy liveness after dependency failure.</summary>
+    /// <param name="throwFailure">Whether the controlled health check throws an exception instead of returning an unhealthy result with private diagnostics.</param>
+    /// <returns>A task that completes after anonymous readiness failure sanitization and continued healthy liveness have been asserted.</returns>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

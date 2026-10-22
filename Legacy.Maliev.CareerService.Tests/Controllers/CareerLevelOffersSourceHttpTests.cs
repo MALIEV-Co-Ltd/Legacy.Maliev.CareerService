@@ -6,10 +6,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks original level-to-offer serialization against the persisted graph.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, production host, and controlled IAM fixture used for the HTTP assertions.</param>
 [Collection("Career shared level")]
 public sealed class CareerLevelOffersSourceHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks that anonymous level reads preserve the original empty offers collection.</summary>
+    /// <param name="detail">Whether to read the seeded level by identifier rather than through the level collection route.</param>
+    /// <returns>A task that completes after checking that anonymous level reads preserve the original empty offers collection.</returns>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -49,6 +54,8 @@ public sealed class CareerLevelOffersSourceHttpTests(CareerLifecycleFixture fixt
         AssertOriginalEmptyOffers(levelJson);
     }
 
+    /// <summary>Checks that authorized level creation returns the original empty offers collection.</summary>
+    /// <returns>A task that completes after checking that authorized level creation returns the original empty offers collection.</returns>
     [Fact]
     public async Task AuthorizedLevelCreate_PreservesOriginalEmptyOffersCollection()
     {
@@ -89,6 +96,9 @@ public sealed class CareerLevelOffersSourceHttpTests(CareerLifecycleFixture fixt
         AssertOriginalEmptyOffers(levelJson);
     }
 
+    /// <summary>Checks that direct level reads leave unloaded offers empty despite persisted siblings.</summary>
+    /// <param name="detail">Whether to read the shared level by identifier rather than request both graph levels from the collection route.</param>
+    /// <returns>A task that completes after checking that direct level reads leave unloaded offers empty despite persisted siblings.</returns>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -127,6 +137,9 @@ public sealed class CareerLevelOffersSourceHttpTests(CareerLifecycleFixture fixt
         Assert.Empty(fixture.Authorities);
     }
 
+    /// <summary>Checks that paginated sibling offers omit nested collections and preserve physical rows.</summary>
+    /// <param name="index">The one-based single-offer page selecting the first or second sibling linked to the shared level.</param>
+    /// <returns>A task that completes after checking that paginated sibling offers omit nested collections and preserve physical rows.</returns>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]

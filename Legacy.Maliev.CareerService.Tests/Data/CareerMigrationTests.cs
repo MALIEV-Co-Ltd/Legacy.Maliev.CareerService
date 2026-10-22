@@ -10,8 +10,11 @@ using Testcontainers.PostgreSql;
 
 namespace Legacy.Maliev.CareerService.Tests.Data;
 
+/// <summary>Checks PostgreSQL migration, query, tracking, and xmin behavior.</summary>
 public sealed class CareerMigrationTests
 {
+    /// <summary>Checks filtering, sorting, and pagination against PostgreSQL.</summary>
+    /// <returns>A task that completes after PostgreSQL filtering, descending offer ordering, paging SQL, related level loading, and untracked results have been asserted.</returns>
     [Fact]
     public async Task Paginated_offer_query_filters_sorts_and_pages_in_postgres()
     {
@@ -56,6 +59,8 @@ public sealed class CareerMigrationTests
         Assert.Empty(context.ChangeTracker.Entries());
     }
 
+    /// <summary>Checks detached reads followed by successful explicit updates.</summary>
+    /// <returns>A task that completes after asserting that single reads remain untracked and an explicitly tracked offer update persists successfully.</returns>
     [Fact]
     public async Task Single_reads_are_untracked_and_detached_updates_still_succeed()
     {
@@ -92,6 +97,8 @@ public sealed class CareerMigrationTests
                 .SingleAsync());
     }
 
+    /// <summary>Checks repeatable migration application and native xmin concurrency metadata.</summary>
+    /// <returns>A task that completes after repeated migration application and the retained tables, foreign-key index, and native xmin column behavior have been asserted.</returns>
     [Fact]
     public async Task Initial_migration_applies_twice_and_preserves_native_xmin()
     {

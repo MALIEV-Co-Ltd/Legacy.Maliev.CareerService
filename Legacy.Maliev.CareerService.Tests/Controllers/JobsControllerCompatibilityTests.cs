@@ -5,8 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks the controller's original boolean and named creation-route contracts.</summary>
 public sealed class JobsControllerCompatibilityTests
 {
+    /// <summary>Checks that the open-position action returns the service boolean directly.</summary>
+    /// <returns>A task that completes after asserting that the controller returns the service open-position boolean directly.</returns>
     [Fact]
     public async Task GetHasOpenPositionsAsync_returns_service_boolean_directly()
     {
@@ -15,6 +18,8 @@ public sealed class JobsControllerCompatibilityTests
         Assert.True(await controller.GetHasOpenPositionsAsync(CancellationToken.None));
     }
 
+    /// <summary>Checks that offer creation retains the GetOffer route and offerId route value.</summary>
+    /// <returns>A task that completes after asserting the created-offer response retains the GetOffer route name and offerId route value.</returns>
     [Fact]
     public async Task CreateOfferAsync_uses_legacy_GetOffer_route_and_offerId_parameter()
     {
