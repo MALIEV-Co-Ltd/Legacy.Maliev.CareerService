@@ -46,6 +46,12 @@ static async Task RunHostAsync(string[] startupArgs)
 
     builder.Services.AddControllers().AddJsonOptions(options =>
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(
+        Legacy.Maliev.CareerService.Api.Serialization.CareerLevelJsonOptions.Configure);
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(
+        Legacy.Maliev.CareerService.Api.Serialization.CareerOfferJsonOptions.Configure);
+    builder.Services.AddSingleton<Microsoft.Extensions.Options.IConfigureOptions<Microsoft.AspNetCore.Mvc.MvcOptions>,
+        Legacy.Maliev.CareerService.Api.Serialization.CareerOriginalBodyMvcOptionsSetup>();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddScoped<ICareerRepository, CareerRepository>();
     builder.Services.AddScoped<ICareerService, CareerApplicationService>();

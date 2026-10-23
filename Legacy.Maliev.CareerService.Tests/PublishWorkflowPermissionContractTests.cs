@@ -2,8 +2,10 @@ using System.Text.RegularExpressions;
 
 namespace Legacy.Maliev.CareerService.Tests;
 
+/// <summary>Checks the publication workflow's OIDC permission boundary.</summary>
 public sealed class PublishWorkflowPermissionContractTests
 {
+    /// <summary>Checks that OIDC write permission is limited to publication jobs.</summary>
     [Fact]
     public void PublishWorkflow_ScopesOidcToPublishJobs()
     {

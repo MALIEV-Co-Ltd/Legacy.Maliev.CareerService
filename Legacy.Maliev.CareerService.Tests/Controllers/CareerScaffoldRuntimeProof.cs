@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Serializes acceptance that inspects the generated scaffold against the owned database.</summary>
 [CollectionDefinition("Career scaffold runtime", DisableParallelization = true)]
 public sealed class CareerScaffoldRuntimeCollection;
 

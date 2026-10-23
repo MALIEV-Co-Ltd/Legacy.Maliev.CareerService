@@ -5,10 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks selected-offer deletion against surviving rows and shared levels.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, production host, and controlled IAM fixture used for the HTTP assertions.</param>
 [Collection("Career shared level")]
 public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks deletion isolation and recomputation of the global open-position boolean.</summary>
+    /// <param name="otherOpen">Whether an unrelated surviving offer remains explicitly unfilled after the selected open offer is deleted.</param>
+    /// <returns>A task that completes after checking deletion isolation and recomputation of the global open-position boolean.</returns>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -88,7 +93,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
             using var detail = await reader.GetAsync($"/Jobs/{offer.Id}");
             Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
             using var json = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
-            AssertOffer(json.RootElement, offer, levels.Single(level => level.Id == offer.LevelId), detail: true);
+            AssertOffer(json.RootElement, offer, levels.Single(level => level.Id == offer.LevelId));
         }
         foreach (var route in new[] { "/Jobs", "/jobs/" })
         {
@@ -152,7 +157,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
         }
     }
 
-    private static void AssertOffer(JsonElement json, JobOffer offer, JobLevel level, bool detail = false)
+    private static void AssertOffer(JsonElement json, JobOffer offer, JobLevel level)
     {
         Assert.Equal(offer.Id, json.GetProperty("id").GetInt32());
         Assert.Equal(offer.LevelId, json.GetProperty("levelId").GetInt32());
@@ -167,8 +172,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
         Assert.False(json.TryGetProperty("introduction", out _));
         Assert.False(json.TryGetProperty("location", out _));
         Assert.False(json.TryGetProperty("Id", out _));
-        if (detail) Assert.False(json.TryGetProperty("level", out _));
-        else AssertLevel(json.GetProperty("level"), level);
+        AssertLevel(json.GetProperty("level"), level);
     }
 
     private static void AssertLevel(JsonElement json, JobLevel level, bool direct = false)

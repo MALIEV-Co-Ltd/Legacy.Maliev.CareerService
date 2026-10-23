@@ -9,8 +9,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Legacy.Maliev.CareerService.Tests.Startup;
 
+/// <summary>Checks private diagnostic formatting, provenance, redaction, and bounded state processing.</summary>
 public sealed class CareerDiagnosticConsoleFormatterTests
 {
+    /// <summary>Checks that level filtering never evaluates an arbitrary message formatter.</summary>
+    /// <param name="level">The log level presented to the private formatter, including suppressed levels and Warning, Error, and Critical.</param>
+    /// <param name="severity">The expected uppercase severity for an emitted event, or null when that level must produce no output.</param>
     [Theory]
     [InlineData(LogLevel.Trace, null)]
     [InlineData(LogLevel.Debug, null)]
@@ -34,6 +38,7 @@ public sealed class CareerDiagnosticConsoleFormatterTests
         Assert.Equal(TimeSpan.Zero, DateTimeOffset.Parse(document.RootElement.GetProperty("occurredAtUtc").GetString()!, CultureInfo.InvariantCulture).Offset);
     }
 
+    /// <summary>Checks runtime exception, activity, and deployment provenance.</summary>
     [Fact]
     public void PrivateFormatter_PreservesRuntimeExceptionActivityAndDeploymentProvenance()
     {
@@ -57,6 +62,8 @@ public sealed class CareerDiagnosticConsoleFormatterTests
         Assert.DoesNotContain("private@example.invalid", line);
     }
 
+    /// <summary>Checks source locations for asynchronous and generic reflection failures.</summary>
+    /// <returns>A task that completes when asynchronous and generic reflection failures retain runtime source locations without private exception text.</returns>
     [Fact]
     public async Task PrivateFormatter_PreservesAsyncAndGenericReflectionSourceLocations()
     {
@@ -77,6 +84,7 @@ public sealed class CareerDiagnosticConsoleFormatterTests
         Assert.DoesNotContain("private@example.invalid", genericDocument.RootElement.GetRawText());
     }
 
+    /// <summary>Checks original safe fields and modern exception-type incident adaptation.</summary>
     [Fact]
     public void PrivateFormatter_PreservesOriginalSafeFieldsAndModernTypeIncidentAdaptation()
     {
@@ -109,6 +117,8 @@ public sealed class CareerDiagnosticConsoleFormatterTests
             Assert.Equal(JsonSerializer.Serialize(field.Value), root.GetProperty(field.Key).GetRawText());
     }
 
+    /// <summary>Checks rejection of unknown keys or invalid scalar diagnostic values.</summary>
+    /// <param name="key">The unknown or restricted diagnostic state key supplied with an invalid email-shaped value to verify omission.</param>
     [Theory]
     [InlineData("EventName")]
     [InlineData("Path")]
@@ -127,6 +137,7 @@ public sealed class CareerDiagnosticConsoleFormatterTests
         Assert.DoesNotContain("private@example.invalid", line);
     }
 
+    /// <summary>Checks state precedence without duplicate keys and with bounded scope processing.</summary>
     [Fact]
     public void PrivateFormatter_StateWinsWithoutDuplicateKeysAndScopeProcessingIsBounded()
     {
@@ -151,6 +162,7 @@ public sealed class CareerDiagnosticConsoleFormatterTests
         finally { foreach (var handle in handles.AsEnumerable().Reverse()) handle.Dispose(); }
     }
 
+    /// <summary>Checks closed behavior for failed state enumeration and untrusted categories.</summary>
     [Fact]
     public void PrivateFormatter_StateEnumerationAndUntrustedCategoryFailClosed()
     {
@@ -163,6 +175,7 @@ public sealed class CareerDiagnosticConsoleFormatterTests
         Assert.Equal("ConfiguredLogger", missingCategory.RootElement.GetProperty("logger").GetString());
     }
 
+    /// <summary>Checks that a null output writer is rejected.</summary>
     [Fact]
     public void PrivateFormatter_NullWriterIsRejected()
     {
