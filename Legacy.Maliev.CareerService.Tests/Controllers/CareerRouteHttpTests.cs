@@ -398,7 +398,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
             Assert.Equal(HttpStatusCode.OK, before.StatusCode);
             using var json = JsonDocument.Parse(await before.Content.ReadAsStringAsync());
             Assert.Equal(oldLevel.Id, json.RootElement.GetProperty("levelId").GetInt32());
-            Assert.Equal(oldLevel.Id, json.RootElement.GetProperty("level").GetProperty("id").GetInt32());
+            Assert.False(json.RootElement.TryGetProperty("level", out _));
         }
         using var writer = fixture.Client("legacy-career.jobs.update");
         using (var updated = await writer.PutAsJsonAsync($"/Jobs/{selected.Id}", new
@@ -446,7 +446,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
             using var response = await anonymous.GetAsync(route);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            AssertSelected(json.RootElement, selected.Id, nextLevel);
+            AssertSelected(json.RootElement, selected.Id, nextLevel, detail: true);
         }
         using (var response = await anonymous.GetAsync("/jobs/"))
         {
@@ -489,14 +489,21 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         ModifiedDate = new DateTime(2020, 1, 2)
     };
 
-    private static void AssertSelected(JsonElement item, int id, JobLevel level)
+    private static void AssertSelected(JsonElement item, int id, JobLevel level, bool detail = false)
     {
         Assert.Equal(id, item.GetProperty("id").GetInt32());
         Assert.Equal(level.Id, item.GetProperty("levelId").GetInt32());
         Assert.Equal("  วิศวกรปรับระดับ  ", item.GetProperty("title").GetString());
-        Assert.Equal(level.Id, item.GetProperty("level").GetProperty("id").GetInt32());
-        Assert.Equal(level.Name, item.GetProperty("level").GetProperty("name").GetString());
-        Assert.False(item.GetProperty("level").TryGetProperty("offers", out _));
+        if (detail)
+        {
+            Assert.False(item.TryGetProperty("level", out _));
+        }
+        else
+        {
+            Assert.Equal(level.Id, item.GetProperty("level").GetProperty("id").GetInt32());
+            Assert.Equal(level.Name, item.GetProperty("level").GetProperty("name").GetString());
+            Assert.False(item.GetProperty("level").TryGetProperty("offers", out _));
+        }
     }
 
     private async Task<string> OfferStateAsync(int id)

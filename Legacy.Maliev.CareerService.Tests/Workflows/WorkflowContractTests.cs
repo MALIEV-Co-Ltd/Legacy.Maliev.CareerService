@@ -24,9 +24,10 @@ public sealed class WorkflowContractTests
         {
             ("--warnaserror", ""),
             ("--no-build --no-restore --filter", "--no-restore --filter"),
+            ("FullyQualifiedName~CareerOfferDetailSourceHttpTests|", ""),
             ("FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor", "FullyQualifiedName~NoSuchTests"),
             ("|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerFixtureLifetimeTests", ""),
-            ("Total:[[:space:]]+24,", "Total:[[:space:]]+0,"),
+            ("Total:[[:space:]]+29,", "Total:[[:space:]]+0,"),
             ("timeout-minutes: 20", "timeout-minutes: 21"),
             ("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68", "actions/setup-dotnet@main"),
             ("Build Release and run changed-behavior regressions before full suite", "Unreviewed focused regression"),
@@ -228,8 +229,8 @@ internal static partial class WorkflowContractValidator
         dotnet build Legacy.Maliev.CareerService.slnx --configuration Release --no-restore --warnaserror 2>&1 | tee runner-results/focus24/build.log
         grep -Eq '^[[:space:]]*0 Warning\(s\)[[:space:]]*$' runner-results/focus24/build.log
         grep -Eq '^[[:space:]]*0 Error\(s\)[[:space:]]*$' runner-results/focus24/build.log
-        VSTestCollect='' dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor|FullyQualifiedName~SelectedOfferDeletion_PreservesSharedLevelsAndSurvivorsAndRecomputesGlobalOpenStatus|FullyQualifiedName~LevelGraph_|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerFixtureLifetimeTests' --logger 'trx;LogFileName=career-focus24.trx' --results-directory runner-results/focus24 2>&1 | tee runner-results/focus24/test.log
-        grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+24, Skipped:[[:space:]]+0, Total:[[:space:]]+24,' runner-results/focus24/test.log
+        VSTestCollect='' dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~CareerOfferDetailSourceHttpTests|FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor|FullyQualifiedName~SelectedOfferDeletion_PreservesSharedLevelsAndSurvivorsAndRecomputesGlobalOpenStatus|FullyQualifiedName~LevelGraph_|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerFixtureLifetimeTests' --logger 'trx;LogFileName=career-focus24.trx' --results-directory runner-results/focus24 2>&1 | tee runner-results/focus24/test.log
+        grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+29, Skipped:[[:space:]]+0, Total:[[:space:]]+29,' runner-results/focus24/test.log
         """;
 
     public static void Validate(string workflow)
@@ -306,7 +307,7 @@ internal static partial class WorkflowContractValidator
         if (!string.Equals(focusRun.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n'),
             FocusCommand.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Focused regression must preserve exact Release zero-warning/error and twenty-four-case selection gates.");
+            throw new InvalidOperationException("Focused regression must preserve exact Release zero-warning/error and twenty-nine-case selection gates.");
         }
         RejectDuplicatedValidationActionsAndCommands(jobs, focusSetup, focus);
 
