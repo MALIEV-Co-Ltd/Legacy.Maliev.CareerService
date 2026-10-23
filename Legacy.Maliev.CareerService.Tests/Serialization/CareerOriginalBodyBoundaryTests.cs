@@ -18,9 +18,12 @@ using Microsoft.Extensions.Options;
 
 namespace Legacy.Maliev.CareerService.Tests.Serialization;
 
+/// <summary>Checks the original-body formatter's registration, logging, and schema boundaries.</summary>
+/// <param name="fixture">The shared Career route fixture providing the application factory, request clients, and test database access.</param>
 [Collection("Career shared level")]
 public sealed class CareerOriginalBodyBoundaryTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks exact DTO selection without changing other readers, output, or scalar metadata.</summary>
     [Fact]
     public void ExactDtoSelection_LeavesOtherReadersOutputAndScalarMetadataIntact()
     {
@@ -56,6 +59,8 @@ public sealed class CareerOriginalBodyBoundaryTests(CareerRouteFixture fixture) 
             CareerOfferNativeOptions.IsOwned);
     }
 
+    /// <summary>Checks safe debug diagnostics delivered to another logging provider.</summary>
+    /// <returns>A task that completes when another logging provider receives safe debug formatter diagnostics without exception or input-value disclosure.</returns>
     [Fact]
     public async Task FormatterLogger_EmitsSafeDiagnosticAtDebugToAnotherProvider()
     {
@@ -81,6 +86,8 @@ public sealed class CareerOriginalBodyBoundaryTests(CareerRouteFixture fixture) 
         });
     }
 
+    /// <summary>Checks that served schemas and request media match native DTO documentation.</summary>
+    /// <returns>A task that completes when both named request schemas and every served request-body media definition match native DTO documentation.</returns>
     [Fact]
     public async Task ServedSchemasAndRequestMedia_RemainEqualToNativeDtoDocument()
     {

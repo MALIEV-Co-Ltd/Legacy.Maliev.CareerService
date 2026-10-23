@@ -8,15 +8,21 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Serializes tests of the shared production pipeline fixture.</summary>
 [CollectionDefinition("Career production pipeline", DisableParallelization = true)]
 public sealed class CareerProductionPipelineHttpTestsCollection;
 
+/// <summary>Checks production CORS, authorization, and sanitized anonymous health responses.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, production host, and controlled IAM fixture used for the HTTP assertions.</param>
 [Collection("Career production pipeline")]
 public sealed class CareerProductionPipelineHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
     private const string AllowedOrigin = "https://example.test";
 
+    /// <summary>Checks that configured origins receive preflight handling before mutation authorization.</summary>
+    /// <param name="allowed">Whether the preflight Origin matches the configured allowed origin rather than the blocked test origin.</param>
+    /// <returns>A task that completes after checking that configured origins receive preflight handling before mutation authorization.</returns>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -49,6 +55,8 @@ public sealed class CareerProductionPipelineHttpTests(CareerLifecycleFixture fix
         }
     }
 
+    /// <summary>Checks that anonymous mutation failures retain the configured browser CORS origin.</summary>
+    /// <returns>A task that completes after checking that anonymous mutation failures retain the configured browser CORS origin.</returns>
     [Fact]
     public async Task ProductionAnonymousMutation_ReturnsUnauthorizedWithConfiguredOriginForBrowserErrorHandling()
     {
@@ -67,6 +75,9 @@ public sealed class CareerProductionPipelineHttpTests(CareerLifecycleFixture fix
         Assert.Equal("true", Assert.Single(response.Headers.GetValues("Access-Control-Allow-Credentials")));
     }
 
+    /// <summary>Checks anonymous healthy probes and their approved sanitized response shape.</summary>
+    /// <param name="probe">The anonymous health route suffix: liveness for the plain Healthy response or readiness for sanitized JSON checks.</param>
+    /// <returns>A task that completes after checking anonymous healthy probes and their approved sanitized response shape.</returns>
     [Theory]
     [InlineData("liveness")]
     [InlineData("readiness")]

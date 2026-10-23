@@ -3,11 +3,14 @@ using System.Text.Json;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks fixture operation ownership and failure-preserving cleanup.</summary>
 public sealed class CareerFixtureLifetimeTests
 {
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(5);
     private sealed class Dummy;
 
+    /// <summary>Checks context operation and disposal failure: preserves exact operation primary.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task ContextOperationAndDisposalFailure_PreservesExactOperationPrimary()
     {
@@ -22,6 +25,8 @@ public sealed class CareerFixtureLifetimeTests
         await Assert.ThrowsAsync<AggregateException>(() => lifetime.DisposeAsync().WaitAsync(Bound));
     }
 
+    /// <summary>Checks context operation success: disposal failure is primary.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task ContextOperationSuccess_DisposalFailureIsPrimary()
     {
@@ -34,6 +39,8 @@ public sealed class CareerFixtureLifetimeTests
         await Assert.ThrowsAsync<AggregateException>(() => lifetime.DisposeAsync().WaitAsync(Bound));
     }
 
+    /// <summary>Checks context primary and evidence failure: still attempts disposal and preserves primary.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task ContextPrimaryAndEvidenceFailure_StillAttemptsDisposalAndPreservesPrimary()
     {
@@ -49,6 +56,8 @@ public sealed class CareerFixtureLifetimeTests
         await Assert.ThrowsAsync<AggregateException>(() => lifetime.DisposeAsync().WaitAsync(Bound));
     }
 
+    /// <summary>Checks explicit context release: is not repeated by fixture cleanup.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task ExplicitContextRelease_IsNotRepeatedByFixtureCleanup()
     {
@@ -62,6 +71,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.Equal(1, releases);
     }
 
+    /// <summary>Checks creation intent: precedes actual resource creation.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task CreationIntent_PrecedesActualResourceCreation()
     {
@@ -73,6 +84,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.Equal("create", trace[1]);
     }
 
+    /// <summary>Checks late creation: is joined and released during dispose.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task LateCreation_IsJoinedAndReleasedDuringDispose()
     {
@@ -98,6 +111,8 @@ public sealed class CareerFixtureLifetimeTests
         finally { release.TrySetResult(); await lifetime.DisposeAsync().WaitAsync(Bound); }
     }
 
+    /// <summary>Checks cancellation proxy: does not detach actual late work.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task CancellationProxy_DoesNotDetachActualLateWork()
     {
@@ -126,6 +141,8 @@ public sealed class CareerFixtureLifetimeTests
         finally { release.TrySetResult(); await lifetime.DisposeAsync().WaitAsync(Bound); }
     }
 
+    /// <summary>Checks first release failure: does not skip other tiers.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task FirstReleaseFailure_DoesNotSkipOtherTiers()
     {
@@ -144,6 +161,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.Contains("postgres", releases);
     }
 
+    /// <summary>Checks cooperative timeout: does not claim noncooperative work ended.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task CooperativeTimeout_DoesNotClaimNoncooperativeWorkEnded()
     {
@@ -170,6 +189,8 @@ public sealed class CareerFixtureLifetimeTests
         finally { release.TrySetResult(); await lifetime.DisposeAsync().WaitAsync(Bound); }
     }
 
+    /// <summary>Checks independent same tier releases: start before first join.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task IndependentSameTierReleases_StartBeforeFirstJoin()
     {
@@ -194,6 +215,8 @@ public sealed class CareerFixtureLifetimeTests
         finally { release.TrySetResult(); await lifetime.DisposeAsync().WaitAsync(Bound); }
     }
 
+    /// <summary>Checks primary failure: is same object when cleanup fails.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task PrimaryFailure_IsSameObjectWhenCleanupFails()
     {
@@ -205,6 +228,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.NotEmpty(lifetime.SecondaryFailures);
     }
 
+    /// <summary>Checks primary failure: is same object when evidence fails.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task PrimaryFailure_IsSameObjectWhenEvidenceFails()
     {
@@ -220,6 +245,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.NotEmpty(lifetime.SecondaryFailures);
     }
 
+    /// <summary>Checks absent container: does not settle unknown volumes or native custody.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task AbsentContainer_DoesNotSettleUnknownVolumesOrNativeCustody()
     {
@@ -233,6 +260,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.Equal("UNQUALIFIED", terminal.NativeCustody);
     }
 
+    /// <summary>Checks closed creation: rejects new external resources.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task ClosedCreation_RejectsNewExternalResources()
     {
@@ -244,6 +273,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.False(created);
     }
 
+    /// <summary>Checks disposal: is idempotent and releases each registration once.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task Disposal_IsIdempotentAndReleasesEachRegistrationOnce()
     {
@@ -257,6 +288,8 @@ public sealed class CareerFixtureLifetimeTests
         Assert.Equal(1, releases);
     }
 
+    /// <summary>Checks reset operations: are serialized and actually joined.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task ResetOperations_AreSerializedAndActuallyJoined()
     {
@@ -280,6 +313,8 @@ public sealed class CareerFixtureLifetimeTests
         finally { release.TrySetResult(); await lifetime.DisposeAsync().WaitAsync(Bound); }
     }
 
+    /// <summary>Checks journal: serializes failure type without credential or message.</summary>
+    /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
     public async Task Journal_SerializesFailureTypeWithoutCredentialOrMessage()
     {

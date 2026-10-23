@@ -5,10 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks original offer-detail navigation omission and read isolation through HTTP.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, production host and controlled authority fixture.</param>
 [Collection("Career shared level")]
 public sealed class CareerOfferDetailSourceHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks exact detail fields and unloaded level omission without changing persisted rows.</summary>
+    /// <param name="nullableFields">Whether the stored optional fields are null and omitted from JSON.</param>
+    /// <returns>A task that completes after HTTP and independent database readback assertions.</returns>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -100,6 +105,9 @@ public sealed class CareerOfferDetailSourceHttpTests(CareerLifecycleFixture fixt
         }
     }
 
+    /// <summary>Checks missing detail IDs return 404 without mutation or authority calls.</summary>
+    /// <param name="id">The missing offer identifier sent to the original detail route.</param>
+    /// <returns>A task that completes after response and persisted graph assertions.</returns>
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

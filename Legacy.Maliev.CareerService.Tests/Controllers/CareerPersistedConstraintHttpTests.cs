@@ -6,12 +6,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Serializes tests of persisted Career text and relationship constraints.</summary>
 [CollectionDefinition("Career persisted constraints", DisableParallelization = true)]
 public sealed class CareerPersistedConstraintCollection;
 
+/// <summary>Checks source text limits and foreign-key failures through the normal HTTP host.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, and signed-client fixture used for the HTTP assertions.</param>
 [Collection("Career persisted constraints")]
 public sealed class CareerPersistedConstraintHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks exact text limits and private rollback of an overlong update.</summary>
+    /// <param name="kind">The bounded text field to update: level selects the level name; offer selects the offer title.</param>
+    /// <param name="limit">The original maximum character count: 50 for a level name or 100 for an offer title.</param>
+    /// <returns>A task that completes after checking exact text limits and private rollback of an overlong update.</returns>
     [Theory]
     [InlineData("level", 50)]
     [InlineData("offer", 100)]
@@ -44,6 +51,8 @@ public sealed class CareerPersistedConstraintHttpTests(CareerRouteFixture fixtur
         Assert.Equal(text, afterJson.RootElement.GetProperty(kind == "level" ? "name" : "title").GetString());
     }
 
+    /// <summary>Checks that a missing level rolls back every attempted offer-field change.</summary>
+    /// <returns>A task that completes after checking that a missing level rolls back every attempted offer-field change.</returns>
     [Fact]
     public async Task OfferUpdate_MissingLevelRollsBackEveryChangedFieldAndPreservesImportedData()
     {
@@ -74,6 +83,10 @@ public sealed class CareerPersistedConstraintHttpTests(CareerRouteFixture fixtur
         Assert.Equal("true", await reader.GetStringAsync("/jobs/job-opening-status/"));
     }
 
+    /// <summary>Checks that missing required level fields fail privately without changing existing rows.</summary>
+    /// <param name="name">The level name submitted to exercise the database required-field constraint, including null.</param>
+    /// <param name="description">The level description submitted to exercise the database required-field constraint, including null.</param>
+    /// <returns>A task that completes after checking that missing required level fields fail privately without changing existing rows.</returns>
     [Theory]
     [InlineData(null, "Description")]
     [InlineData("Name", null)]

@@ -5,10 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks selected-offer deletion against surviving rows and shared levels.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, production host, and controlled IAM fixture used for the HTTP assertions.</param>
 [Collection("Career shared level")]
 public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixture fixture)
     : IClassFixture<CareerLifecycleFixture>
 {
+    /// <summary>Checks deletion isolation and recomputation of the global open-position boolean.</summary>
+    /// <param name="otherOpen">Whether an unrelated surviving offer remains explicitly unfilled after the selected open offer is deleted.</param>
+    /// <returns>A task that completes after checking deletion isolation and recomputation of the global open-position boolean.</returns>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

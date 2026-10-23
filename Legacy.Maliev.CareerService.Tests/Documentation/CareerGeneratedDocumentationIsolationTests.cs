@@ -2,13 +2,20 @@ using System.Xml.Linq;
 
 namespace Legacy.Maliev.CareerService.Tests.Documentation;
 
+/// <summary>Checks compiler-produced XML documentation and its isolation from project source roots.</summary>
 public sealed class CareerGeneratedDocumentationIsolationTests
 {
+    /// <summary>Checks actual assembly documentation, a meaningful member summary, and source-root isolation.</summary>
+    /// <param name="assemblyName">The Career assembly name used to locate its compiler-generated XML file in build output and check that no matching XML file exists in its project source root.</param>
+    /// <param name="documentedMember">The XML documentation member identifier to locate in that assembly file and verify has a nonblank summary.</param>
     [Theory]
     [InlineData("Legacy.Maliev.CareerService.Api", "T:Program")]
     [InlineData("Legacy.Maliev.CareerService.Application", "T:Legacy.Maliev.CareerService.Application.Interfaces.ICareerService")]
     [InlineData("Legacy.Maliev.CareerService.Data", "T:Legacy.Maliev.CareerService.Data.CareerDbContext")]
     [InlineData("Legacy.Maliev.CareerService.Domain", "T:Legacy.Maliev.CareerService.Domain.JobOffer")]
+    [InlineData("Legacy.Maliev.CareerService.Tests", "T:Legacy.Maliev.CareerService.Tests.Documentation.CareerGeneratedDocumentationIsolationTests")]
+    [InlineData("Legacy.Maliev.CareerService.Tests", "M:Legacy.Maliev.CareerService.Tests.Documentation.CareerGeneratedDocumentationIsolationTests.CompilerDocumentation_IsAvailableInOutputWithoutSourceRootArtifact(System.String,System.String)")]
+    [InlineData("Legacy.Maliev.CareerService.Tests", "P:Legacy.Maliev.CareerService.Tests.Controllers.CareerLifecycleFixture.Factory")]
     public void CompilerDocumentation_IsAvailableInOutputWithoutSourceRootArtifact(string assemblyName, string documentedMember)
     {
         var output = Path.Combine(AppContext.BaseDirectory, assemblyName + ".xml");

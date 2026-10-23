@@ -63,7 +63,7 @@ internal sealed class CareerFixtureLifetime
         var configuredRun = Environment.GetEnvironmentVariable("CAREER_FIXTURE_RUN");
         var run = Guid.TryParse(configuredRun, out var runId) ? runId.ToString("N") : "UNQUALIFIED";
         var configuredPhase = Environment.GetEnvironmentVariable("CAREER_FIXTURE_PHASE");
-        var phase = configuredPhase is "focus12" or "full" ? configuredPhase : "UNKNOWN";
+        var phase = configuredPhase is "focus24" or "full" ? configuredPhase : "UNKNOWN";
         File.AppendAllText(path, JsonSerializer.Serialize(entry with { RunId = run, Phase = phase }) + "\n");
     }
 
