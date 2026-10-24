@@ -324,10 +324,10 @@ public sealed class CareerDirectoryOffsetHttpTests(CareerLifecycleFixture fixtur
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
         var root = json.RootElement;
-        string[] keys = ["items", "pageIndex", "totalPages", "totalItems", "hasPreviousPage", "hasNextPage"];
+        string[] keys = ["items", "pageIndex", "totalPages", "totalRecords", "hasPreviousPage", "hasNextPage"];
         Assert.Equal(keys.Order(StringComparer.Ordinal), root.EnumerateObject().Select(row => row.Name).Order(StringComparer.Ordinal));
         var pages = (int)Math.Ceiling(ids.Length / (double)pageSize);
-        Assert.Equal(ids.Length, root.GetProperty("totalItems").GetInt32());
+        Assert.Equal(ids.Length, root.GetProperty("totalRecords").GetInt32());
         Assert.Equal(pageIndex, root.GetProperty("pageIndex").GetInt32());
         Assert.Equal(pages, root.GetProperty("totalPages").GetInt32());
         Assert.Equal(pageIndex > 1, root.GetProperty("hasPreviousPage").GetBoolean());

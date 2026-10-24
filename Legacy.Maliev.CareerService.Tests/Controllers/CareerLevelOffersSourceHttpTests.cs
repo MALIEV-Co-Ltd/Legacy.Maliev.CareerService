@@ -155,7 +155,7 @@ public sealed class CareerLevelOffersSourceHttpTests(CareerLifecycleFixture fixt
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
         var root = json.RootElement;
         Assert.Equal(index, root.GetProperty("pageIndex").GetInt32());
-        Assert.Equal(3, root.GetProperty("totalItems").GetInt32());
+        Assert.Equal(3, root.GetProperty("totalRecords").GetInt32());
         Assert.Equal(3, root.GetProperty("totalPages").GetInt32());
         Assert.Equal(index > 1, root.GetProperty("hasPreviousPage").GetBoolean());
         Assert.True(root.GetProperty("hasNextPage").GetBoolean());

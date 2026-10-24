@@ -200,7 +200,7 @@ public sealed class CareerLifecycleAcceptanceTests(CareerLifecycleFixture fixtur
             ["UpsertJobLevelRequest"] = ["name", "description"],
             ["JobLevelResponse"] = ["id", "name", "description", "createdDate", "modifiedDate"],
             ["JobOfferResponse"] = ["id", "levelId", "title", "introduction", "description", "prerequisites", "whatWeOffer", "location", "isFilled", "createdDate", "modifiedDate", "level"],
-            ["PaginatedJobOfferResponse"] = ["items", "pageIndex", "totalPages", "totalItems", "hasPreviousPage", "hasNextPage"],
+            ["PaginatedJobOfferResponse"] = ["items", "pageIndex", "totalPages", "totalRecords", "hasPreviousPage", "hasNextPage"],
         };
         foreach (var (name, properties) in expected)
             Assert.Equal(properties.Order(StringComparer.Ordinal).ToArray(), schemas.GetProperty(name).GetProperty("properties").EnumerateObject().Select(item => item.Name).Order(StringComparer.Ordinal).ToArray());

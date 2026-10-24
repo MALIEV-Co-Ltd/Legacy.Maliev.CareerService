@@ -41,7 +41,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var page = json.RootElement;
-        Assert.Equal(2, page.GetProperty("totalItems").GetInt32());
+        Assert.Equal(2, page.GetProperty("totalRecords").GetInt32());
         Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
         Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
         Assert.False(page.GetProperty("hasNextPage").GetBoolean());
@@ -210,7 +210,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         using var response = await client.GetAsync("/Jobs?search=" + Uri.EscapeDataString(search));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(1, json.RootElement.GetProperty("totalItems").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("totalRecords").GetInt32());
         Assert.Equal(title, Assert.Single(json.RootElement.GetProperty("items").EnumerateArray()).GetProperty("title").GetString());
     }
 
@@ -231,7 +231,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         db.Offers.AddRange(first, second); await db.SaveChangesAsync(); using var client = fixture.Client();
         using var response = await client.GetAsync($"/Jobs?sort={sort}&index=2&size=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode); using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var page = json.RootElement; Assert.Equal(2, page.GetProperty("totalItems").GetInt32());
+        var page = json.RootElement; Assert.Equal(2, page.GetProperty("totalRecords").GetInt32());
         Assert.Equal(2, page.GetProperty("totalPages").GetInt32()); Assert.True(page.GetProperty("hasPreviousPage").GetBoolean());
         Assert.False(page.GetProperty("hasNextPage").GetBoolean());
         Assert.Equal(descending ? first.Id : second.Id, Assert.Single(page.GetProperty("items").EnumerateArray()).GetProperty("id").GetInt32());
@@ -271,7 +271,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var items = json.RootElement.GetProperty("items").EnumerateArray().ToArray();
         Assert.Equal(expected, items.Select(item => item.GetProperty("id").GetInt32()).ToArray());
-        Assert.Equal(4, json.RootElement.GetProperty("totalItems").GetInt32());
+        Assert.Equal(4, json.RootElement.GetProperty("totalRecords").GetInt32());
         Assert.False(items.Single(item => item.GetProperty("id").GetInt32() == undated.Id).TryGetProperty("createdDate", out _));
         for (var index = 1; index <= expected.Length; index++)
         {
@@ -280,7 +280,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
             using var pageJson = JsonDocument.Parse(await pageResponse.Content.ReadAsStringAsync());
             var page = pageJson.RootElement;
             Assert.Equal(index, page.GetProperty("pageIndex").GetInt32());
-            Assert.Equal(4, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(4, page.GetProperty("totalRecords").GetInt32());
             Assert.Equal(4, page.GetProperty("totalPages").GetInt32());
             Assert.Equal(index > 1, page.GetProperty("hasPreviousPage").GetBoolean());
             Assert.Equal(index < 4, page.GetProperty("hasNextPage").GetBoolean());
@@ -303,7 +303,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         db.Offers.Add(new JobOffer { LevelId = levelId, Title = "Text includes " + first.Id }); await db.SaveChangesAsync();
         using var client = fixture.Client(); using var response = await client.GetAsync($"/Jobs?search={first.Id}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode); using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(2, json.RootElement.GetProperty("totalItems").GetInt32());
+        Assert.Equal(2, json.RootElement.GetProperty("totalRecords").GetInt32());
     }
 
     /// <summary>Checks literal characters and significant spaces across all original searchable fields.</summary>
@@ -332,7 +332,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
             using var response = await client.GetAsync("/Jobs?search=" + Uri.EscapeDataString(search));
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.Equal(1, json.RootElement.GetProperty("totalItems").GetInt32());
+            Assert.Equal(1, json.RootElement.GetProperty("totalRecords").GetInt32());
             var item = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
             Assert.Equal(matched.Id, item.GetProperty("id").GetInt32());
             Assert.Equal("Prefix" + search + "Suffix", item.GetProperty(field).GetString());
@@ -452,7 +452,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         {
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.Equal(2, json.RootElement.GetProperty("totalItems").GetInt32());
+            Assert.Equal(2, json.RootElement.GetProperty("totalRecords").GetInt32());
             var items = json.RootElement.GetProperty("items").EnumerateArray().ToArray();
             Assert.Equal(new[] { selected.Id, survivor.Id }.OrderBy(id => id).ToArray(),
                 items.Select(item => item.GetProperty("id").GetInt32()).ToArray());
@@ -657,7 +657,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
             var page = json.RootElement;
-            Assert.Equal(1001, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(1001, page.GetProperty("totalRecords").GetInt32());
             Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
             Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
             Assert.False(page.GetProperty("hasPreviousPage").GetBoolean());
@@ -720,7 +720,7 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
             var page = json.RootElement;
-            Assert.Equal(1000, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(1000, page.GetProperty("totalRecords").GetInt32());
             Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
             Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
             Assert.False(page.GetProperty("hasPreviousPage").GetBoolean());
@@ -819,22 +819,30 @@ public sealed class CareerRouteFixture : IAsyncLifetime
     private readonly IContainer redis;
     private readonly RSA key;
     private readonly RSA wrongKey;
+    private readonly Func<CancellationToken, Task>? afterProvidersStarted;
+    internal PostgreSqlContainer PostgresResource => postgres;
+    internal IContainer RedisResource => redis;
 
     /// <summary>Retains fixture resources from construction through terminal cleanup.</summary>
-    public CareerRouteFixture()
+    public CareerRouteFixture() : this(null) { }
+
+    internal CareerRouteFixture(Func<CancellationToken, Task>? afterProvidersStarted)
     {
+        this.afterProvidersStarted = afterProvidersStarted;
         try
         {
             key = lifetime.Create("key", 3, () => RSA.Create(2048), value => { value.Dispose(); return ValueTask.CompletedTask; });
             wrongKey = lifetime.Create("wrong-key", 3, () => RSA.Create(2048), value => { value.Dispose(); return ValueTask.CompletedTask; });
             postgres = lifetime.Create("postgres", 4,
-                () => new PostgreSqlBuilder("postgres:18-alpine").WithLabel("com.maliev.career.fixture", lifetime.FixtureId).Build(),
-                value => value.DisposeAsync(), value => CareerFixtureLifetime.ObserveContainer(value, "postgres:18-alpine"));
+                () => new PostgreSqlBuilder("postgres:18-alpine").WithLabel("com.maliev.career.fixture", lifetime.FixtureId)
+                    .WithCreateParameterModifier(parameters => CareerFixtureContainerLimits.Postgres(parameters, lifetime.FixtureId)).Build(),
+                value => CareerFixtureContainerLimits.ReleaseAsync(value, lifetime.FixtureId), value => CareerFixtureLifetime.ObserveContainer(value, "postgres:18-alpine"));
             redis = lifetime.Create("redis", 4,
                 () => new ContainerBuilder("redis:7.4-alpine").WithPortBinding(6379, true)
                     .WithLabel("com.maliev.career.fixture", lifetime.FixtureId)
-                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build(),
-                value => value.DisposeAsync(), value => CareerFixtureLifetime.ObserveContainer(value, "redis:7.4-alpine"));
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                    .WithCreateParameterModifier(parameters => CareerFixtureContainerLimits.Redis(parameters, lifetime.FixtureId)).Build(),
+                value => CareerFixtureContainerLimits.ReleaseAsync(value, lifetime.FixtureId), value => CareerFixtureLifetime.ObserveContainer(value, "redis:7.4-alpine"));
         }
         catch (Exception primary)
         {
@@ -853,10 +861,11 @@ public sealed class CareerRouteFixture : IAsyncLifetime
         {
             await lifetime.RunAsync("initialize", async cancellation =>
             {
-                await lifetime.RunAsync("postgres-start", token => postgres.StartAsync(token), TimeSpan.FromMinutes(4), cancellation);
+                await lifetime.RunAsync("postgres-start", token => { CareerFixtureContainerLimits.RequireFreshAdmission(); return postgres.StartAsync(token); }, TimeSpan.FromSeconds(120), cancellation);
                 lifetime.ObserveOwned(postgres);
-                await lifetime.RunAsync("redis-start", token => redis.StartAsync(token), TimeSpan.FromMinutes(4), cancellation);
+                await lifetime.RunAsync("redis-start", token => { CareerFixtureContainerLimits.RequireFreshAdmission(); return redis.StartAsync(token); }, TimeSpan.FromSeconds(120), cancellation);
                 lifetime.ObserveOwned(redis);
+                if (afterProvidersStarted is not null) await afterProvidersStarted(cancellation);
                 await lifetime.UseOwnedAsync(Context, (db, token) => db.Database.MigrateAsync(token), cancellation);
                 Factory = lifetime.Create("factory", 2, () => new CareerFactory(this), value => value.DisposeAsync());
             }, TimeSpan.FromMinutes(4));

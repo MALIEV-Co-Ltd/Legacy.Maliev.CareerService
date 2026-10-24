@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Legacy.Maliev.CareerService.Application.Models;
 
 /// <summary>Legacy-compatible job sort values.</summary>
@@ -44,7 +46,7 @@ public sealed record PaginatedJobOfferResponse(
     IReadOnlyList<JobOfferResponse> Items,
     int PageIndex,
     int TotalPages,
-    int TotalItems,
+    [property: JsonPropertyName("totalRecords")] int TotalItems,
     bool HasPreviousPage,
     bool HasNextPage);
 
