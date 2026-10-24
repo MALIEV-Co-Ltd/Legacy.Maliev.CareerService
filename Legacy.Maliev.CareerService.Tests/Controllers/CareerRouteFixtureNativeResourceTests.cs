@@ -114,11 +114,17 @@ public sealed class CareerRouteFixtureNativeResourceTests
         Assert.DoesNotContain(actual.Mounts, mount => mount.Type != "tmpfs");
         Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
         {
-            ProviderId = actual.ID, actual.Image, actual.Created,
+            ProviderId = actual.ID,
+            actual.Image,
+            actual.Created,
             Owner = actual.Config.Labels["maliev.test.owner"],
             Fixture = actual.Config.Labels["maliev.test.fixture"],
-            actual.HostConfig.Memory, actual.HostConfig.MemorySwap, actual.HostConfig.NanoCPUs, actual.HostConfig.PidsLimit,
-            LoopbackOnly = true, Tmpfs = tmpfs
+            actual.HostConfig.Memory,
+            actual.HostConfig.MemorySwap,
+            actual.HostConfig.NanoCPUs,
+            actual.HostConfig.PidsLimit,
+            LoopbackOnly = true,
+            Tmpfs = tmpfs
         }));
     }
 
