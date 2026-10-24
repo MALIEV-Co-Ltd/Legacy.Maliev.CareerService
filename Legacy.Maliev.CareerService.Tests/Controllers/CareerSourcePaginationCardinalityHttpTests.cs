@@ -68,7 +68,7 @@ public sealed class CareerSourcePaginationCardinalityHttpTests(CareerLifecycleFi
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var page = json.RootElement;
-        Assert.Equal(1000, page.GetProperty("totalItems").GetInt32());
+        Assert.Equal(1000, page.GetProperty("totalRecords").GetInt32());
         Assert.Equal(index, page.GetProperty("pageIndex").GetInt32());
         Assert.Equal(totalPages, page.GetProperty("totalPages").GetInt32());
         Assert.Equal(previous, page.GetProperty("hasPreviousPage").GetBoolean());

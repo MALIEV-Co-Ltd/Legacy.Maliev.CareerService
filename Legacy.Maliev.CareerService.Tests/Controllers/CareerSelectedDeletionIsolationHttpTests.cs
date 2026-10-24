@@ -101,7 +101,7 @@ public sealed class CareerSelectedDeletionIsolationHttpTests(CareerLifecycleFixt
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var page = json.RootElement;
-            Assert.Equal(3, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(3, page.GetProperty("totalRecords").GetInt32());
             Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
             Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
             Assert.False(page.GetProperty("hasPreviousPage").GetBoolean());
