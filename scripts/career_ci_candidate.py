@@ -266,7 +266,11 @@ def verify_workflow_filter(path):
     return verify_focused_filter(expressions[0])
 
 
-def verify_focused(root):
+def verify_focused(root, roster=None):
+    roster=FOCUSED_ROSTER if roster is None else roster
+    if not isinstance(roster, (set, frozenset)) or not roster:
+        raise ValueError("A nonempty closed authored roster is required")
+    expected_count=len(roster)
     import xml.etree.ElementTree as ET
     files=list(Path(root).rglob('*.trx'))
     if len(files)!=1:raise ValueError('Exactly one actual focused TRX required')
@@ -282,8 +286,8 @@ def verify_focused(root):
         ident=node.get('id','');name=node.get('name','')
         methods=node.findall(q('TestMethod'));executions=node.findall(q('Execution'))
         if (node.tag!=q('UnitTest') or not guid.fullmatch(ident) or ident.lower() in defs or
-            name not in FOCUSED_ROSTER or name in names or len(methods)!=1 or len(executions)!=1):
-            raise ValueError('Exact authored40 definitions and unique identities required')
+            name not in roster or name in names or len(methods)!=1 or len(executions)!=1):
+            raise ValueError('Exact authored definitions and unique identities required')
         method=methods[0];execution=executions[0].get('id','')
         fullname=name.split('(',1)[0]
         cls,meth=fullname.rsplit('.',1)
@@ -294,7 +298,7 @@ def verify_focused(root):
             not guid.fullmatch(execution) or execution.lower() in execution_ids):
             raise ValueError('Exact Career assembly/class/method/execution wire required')
         defs[ident.lower()]=(name,execution.lower());execution_ids.add(execution.lower());names.add(name)
-    if len(defs)!=40 or names!=FOCUSED_ROSTER:raise ValueError('Exact authored40 roster required')
+    if len(defs)!=expected_count or names!=roster:raise ValueError('Exact authored roster required')
     seen=set();seen_executions=set()
     for node in results:
         ident=node.get('testId','').lower();execution=node.get('executionId','').lower()
@@ -307,17 +311,17 @@ def verify_focused(root):
     if seen!=set(defs):raise ValueError('Incomplete actual focused result graph')
     counters=summary.findall(q('Counters'))
     if len(counters)!=1 or summary.get('outcome')!='Completed':raise ValueError('Exact successful TRX summary required')
-    required={'total':40,'executed':40,'passed':40,'failed':0,'error':0,'notExecuted':0}
+    required={'total':expected_count,'executed':expected_count,'passed':expected_count,'failed':0,'error':0,'notExecuted':0}
     optional={'completed','passedButRunAborted','disconnected','timeout','warning','aborted','inconclusive','notRunnable','pending','inProgress'}
     counts=counters[0].attrib
     if (not set(required)<=set(counts) or set(counts)-set(required)-optional or
         any(not re.fullmatch(r'\d+',v) for v in counts.values()) or
         any(counts[k]!=str(v) for k,v in required.items()) or
         any(int(v)!=0 for k,v in counts.items() if k not in required)):
-        raise ValueError('Actual focused40 counters or infrastructure outcomes mismatch')
+        raise ValueError('Actual focused counters or infrastructure outcomes mismatch')
     if any(node.get('outcome') in {'Error','Warning','Failed','Aborted','Timeout'} for node in run.iter(q('RunInfo'))):
         raise ValueError('Run-level infrastructure failure refused')
-    return {'actualFocusedPassed':40,'failed':0,'skipped':0,'trxSha256':digest(files[0].read_bytes()),
+    return {'actualFocusedPassed':expected_count,'failed':0,'skipped':0,'trxSha256':digest(files[0].read_bytes()),
             'exactAuthoredRosterAndDefinitionJoin':True,'physicalRemovalEvidenceStillRequiresReview':True}
 
 

@@ -14,5 +14,3 @@ concurrency:
 jobs:
   validate:
     uses: ./.github/workflows/_build-and-test.yml
-    with:
-      source-candidate: true

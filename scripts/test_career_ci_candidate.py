@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 import career_ci_candidate as candidate
+import career_direct_source_focus as direct
 
 HERE=Path(__file__).resolve().parent
 PACKET=HERE/'career-ci-candidate'
@@ -82,38 +83,47 @@ class CandidateControls(unittest.TestCase):
         text=(HERE.parent/'.github/workflows/pr-validation.yml').read_text()
         self.assertIn('pull_request:',text)
         self.assertIn('uses: ./.github/workflows/_build-and-test.yml',text)
-        self.assertIn('source-candidate: true',text)
+        self.assertNotIn('source-candidate:',text)
         self.assertNotIn('workflow_dispatch:',text)
 
     def test_candidate_commands_have_required_order_and_full_suite_unfiltered(self):
         text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
-        markers=['Verify and unpack reviewed candidate source','Check fresh physical memory before SDK setup',
-                 'Set up .NET for candidate','Restore candidate','Strict Release build candidate first',
-                 'Focused forty original lifecycle and real provider cases','Unfiltered full candidate suite',
-                 'Candidate format and package audit','Gate owned production coverage']
+        markers=['Check fresh physical memory before SDK setup','Set up .NET for build-first focused regression',
+                 'Build Release and run changed-behavior regressions before full suite','Check fresh memory before shared validation',
+                 'Validate .NET solution','Verify complete JSON package audit','Gate owned production coverage']
         positions=[text.index('name: '+x) for x in markers]
         self.assertEqual(positions,sorted(positions))
-        full=text.split('name: Unfiltered full candidate suite')[1].split('name: Candidate format')[0]
+        full=text.split('name: Validate .NET solution')[1].split('      - name:')[0]
+        # This immutable main action executes unfiltered solution tests and format/audit/scanners.
+        self.assertIn('dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8',full)
+        self.assertIn('solution: Legacy.Maliev.CareerService.slnx',full)
         self.assertNotIn('--filter',full)
-        self.assertIn('-warnaserror',text)
-        self.assertIn("--collect 'XPlat Code Coverage'",full)
+        self.assertIn('--warnaserror',text)
+        self.assertIn('VSTestCollect: XPlat Code Coverage',text)
+        self.assertNotIn('scripts/career_ci_candidate.py\n',text)
 
     def test_normal_shared_route_preserved_and_security_pin_unchanged(self):
         text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
-        self.assertIn('if: ${{ !inputs.source-candidate }}',text)
-        self.assertIn('dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8',text)
-        self.assertIn('GOTOOLCHAIN: go1.26.8',text)
+        self.assertNotIn('inputs.source-candidate',text)
+        self.assertEqual(text.count('dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8'),1)
+        self.assertNotIn('GOTOOLCHAIN:',text)
         self.assertIn('timeout-minutes: 30',text)
         self.assertIn('if: always()',text)
 
     def test_each_candidate_native_phase_has_fresh_floor_and_finite_timeout(self):
         text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
-        for name in ('Restore candidate','Strict Release build candidate first',
-                     'Focused forty original lifecycle and real provider cases',
-                     'Unfiltered full candidate suite','Candidate format and package audit'):
-            step=text.split('name: '+name)[1].split('      - name:')[0]
-            self.assertIn('python3 -B scripts/career_required_ci_preflight.py',step)
-            self.assertIn('timeout --signal=TERM --kill-after=5s',step)
+        focus=text.split('name: Build Release and run changed-behavior regressions before full suite')[1].split('      - name:')[0]
+        self.assertIn('timeout-minutes: 20',focus)
+        self.assertEqual(focus.count('python3 -B scripts/career_required_ci_preflight.py'),5)
+        for command in ('restore','build','test'):
+            self.assertIn('timeout --signal=TERM --kill-after=5s 300s dotnet '+command,focus)
+        self.assertEqual(focus.count('300s dotnet test'),3)
+        shared=text.split('name: Check fresh memory before shared validation')[1].split('name: Verify complete JSON package audit')[0]
+        self.assertIn('scripts/career_required_ci_preflight.py',shared)
+        self.assertIn('timeout-minutes: 10',shared)
+        audit=text.split('name: Verify complete JSON package audit')[1].split('      - name:')[0]
+        self.assertIn('scripts/career_required_ci_preflight.py',audit)
+        self.assertIn('timeout --signal=TERM --kill-after=5s 120s dotnet list',audit)
 
     def audit(self):
         return {'projects':[{'path':'/checkout/Legacy.Maliev.CareerService.'+name+'.csproj',
@@ -165,15 +175,18 @@ class CandidateControls(unittest.TestCase):
 
     def test_candidate_scanners_use_qualified_pin_output_and_go9(self):
         text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
-        checkout=text.split('name: Check out exact existing shared scanners')[1].split('      - name:')[0]
-        self.assertIn('steps.candidate.outputs.qualified-shared-ref',checkout)
-        self.assertNotIn('e3a609',checkout)
-        scan=text.split('name: Scan candidate using exact existing scanners')[1].split('      - name:')[0]
-        self.assertIn('GOTOOLCHAIN: go1.26.9',scan)
+        # Active source uses current main's exact security action; the archival hydrator
+        # still separately refuses its unqualified scanner successor in retained tests.
+        step=text.split('name: Validate .NET solution')[1].split('      - name:')[0]
+        self.assertIn('dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8',step)
+        self.assertNotIn('if:',step)
+        self.assertNotIn('continue-on-error',text)
+        self.assertNotIn('steps.candidate.outputs',text)
+        self.assertNotIn('GOTOOLCHAIN:',text)
 
     def test_audit_command_checks_json_after_exit_status_and_preserves_raw(self):
         text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
-        step=text.split('name: Candidate format and package audit')[1].split('      - name:')[0]
+        step=text.split('name: Verify complete JSON package audit')[1].split('      - name:')[0]
         self.assertIn('--format json',step)
         self.assertIn('set -euo pipefail',step)
         self.assertIn('scripts/career_ci_candidate.py audit',step)
@@ -203,36 +216,42 @@ class CandidateControls(unittest.TestCase):
                 report['projects'][0]['frameworks'][0]['topLevelPackages']=[{'id':'Package','vulnerabilities':[]}]
             self.assertEqual(candidate.audit_no_vulnerabilities(json.dumps(report))['vulnerabilities'],0)
 
-    def trx(self,failed=False,missing=False,wrong_class=False):
+    def trx(self,failed=False,missing=False,wrong_class=False,roster=None):
+        roster=candidate.FOCUSED_ROSTER if roster is None else roster
+        expected=len(roster)
         import uuid
         import xml.etree.ElementTree as ET
         root=self.root/'focused';root.mkdir(exist_ok=True)
         q=lambda name:'{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'+name
         run=ET.Element(q('TestRun'));results=ET.SubElement(run,q('Results'))
         definitions=ET.SubElement(run,q('TestDefinitions'))
-        for count,name in enumerate(sorted(candidate.FOCUSED_ROSTER),1):
+        for count,name in enumerate(sorted(roster),1):
             ident=str(uuid.UUID(int=count));execution=str(uuid.UUID(int=100+count))
             fullname=name.split('(',1)[0];cls,method=fullname.rsplit('.',1)
             node=ET.SubElement(definitions,q('UnitTest'),id=ident,name=name,storage='/work/'+candidate.FOCUSED_ASSEMBLY)
             ET.SubElement(node,q('Execution'),id=execution)
             ET.SubElement(node,q('TestMethod'),className=cls,name=method,codeBase='/work/'+candidate.FOCUSED_ASSEMBLY)
-            if missing and count==40:continue
+            if missing and count==expected:continue
             ET.SubElement(results,q('UnitTestResult'),testId=ident,executionId=execution,
-                testName='ForeignTests.Case' if wrong_class and count==40 else name,
-                outcome='Failed' if failed and count==40 else 'Passed',testType=candidate.UNIT_TEST_TYPE)
+                testName='ForeignTests.Case' if wrong_class and count==expected else name,
+                outcome='Failed' if failed and count==expected else 'Passed',testType=candidate.UNIT_TEST_TYPE)
         summary=ET.SubElement(run,q('ResultSummary'),outcome='Completed')
-        ET.SubElement(summary,q('Counters'),total='40',executed='40',passed='40',failed='0',error='0',notExecuted='0')
+        ET.SubElement(summary,q('Counters'),total=str(expected),executed=str(expected),passed=str(expected),failed='0',error='0',notExecuted='0')
         ET.ElementTree(run).write(root/'focused.trx',encoding='utf-8',xml_declaration=True)
         return root
 
     def test_focused_parser_contract_positive_fixture_is_not_runtime_proof(self):
         report=candidate.verify_focused(self.trx())
+        self.assertEqual((len(direct.RETAINED_ROSTER),len(direct.WIRE_ROSTER),len(direct.BOUNDARY_ROSTER)),(26,4,6))
         self.assertEqual(report['actualFocusedPassed'],40)
         self.assertTrue(report['physicalRemovalEvidenceStillRequiresReview'])
+        for roster in (direct.RETAINED_ROSTER,direct.WIRE_ROSTER,direct.BOUNDARY_ROSTER):
+            self.assertEqual(candidate.verify_focused(self.trx(roster=roster),roster)['actualFocusedPassed'],len(roster))
 
     def test_focused_parser_rejects_failed_missing_or_foreign_case_despite_green_counters(self):
-        for kwargs in ({'failed':True},{'missing':True},{'wrong_class':True}):
-            with self.assertRaises(ValueError):candidate.verify_focused(self.trx(**kwargs))
+        for roster in (candidate.FOCUSED_ROSTER,direct.RETAINED_ROSTER,direct.WIRE_ROSTER,direct.BOUNDARY_ROSTER):
+            for kwargs in ({'failed':True},{'missing':True},{'wrong_class':True}):
+                with self.assertRaises(ValueError):candidate.verify_focused(self.trx(roster=roster,**kwargs),roster)
 
     def test_focused_parser_requires_actual_receipt_and_counters(self):
         with self.assertRaises(ValueError):candidate.verify_focused(self.root)
@@ -241,9 +260,10 @@ class CandidateControls(unittest.TestCase):
 
     def test_full_coverage_gate_uses_unfiltered_full_directory(self):
         text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
-        self.assertIn("inputs.source-candidate && 'runner-results/full' || 'runner-results'",text)
-        self.assertIn('scripts/career_ci_candidate.py focused runner-results/focused',text)
-
+        self.assertIn('VSTestResultsDirectory: ${{ github.workspace }}/runner-results',text)
+        self.assertIn('run: python3 scripts/verify-runner-coverage.py runner-results',text)
+        self.assertIn('VSTestCollect: XPlat Code Coverage',text)
+        self.assertEqual(text.count('dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8'),1)
 
     def test_focused_rejects_definition_identity_assembly_and_theory_mutations(self):
         import xml.etree.ElementTree as ET
@@ -334,8 +354,14 @@ class CandidateControls(unittest.TestCase):
         with self.assertRaises(ValueError):candidate.verify_focused(path.parent)
 
     def test_reviewed_filter_and_workflow_are_exact_and_reject_overbroad_lifecycle(self):
-        workflow=HERE.parent/'.github/workflows/_build-and-test.yml'
+        workflow=self.root/'historical-workflow.yml'
+        workflow.write_text("run: dotnet test --filter '"+candidate.FOCUSED_FILTER+"'\n")
         self.assertEqual(candidate.verify_workflow_filter(workflow),candidate.FOCUSED_FILTER)
+        active=HERE.parent/'.github/workflows/_build-and-test.yml'
+        self.assertEqual(tuple(direct.verify_workflow(active)),direct.FILTERS)
+        bad=self.root/'direct-bad.yml'
+        bad.write_text(active.read_text().replace(direct.FILTERS[0], 'FullyQualifiedName~CareerFixtureLifetimeTests'))
+        with self.assertRaises(ValueError):direct.verify_workflow(bad)
         prefix='FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerLifecycleAcceptanceTests'
         specific=prefix+'.Delete_OriginalEmptyDatabaseIntMaxReturns404AfterFreshLiveDecision'
         for expression in (candidate.FOCUSED_FILTER.replace(specific,prefix),candidate.FOCUSED_FILTER+'|'+prefix,

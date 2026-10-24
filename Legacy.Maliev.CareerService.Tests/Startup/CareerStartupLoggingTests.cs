@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Reflection;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,7 +8,7 @@ using System.Text.Json;
 using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Data;
 using Legacy.Maliev.CareerService.Domain;
-using Maliev.Aspire.ServiceDefaults.Logging;
+using Legacy.Maliev.CareerService.Api.Logging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
@@ -26,10 +28,15 @@ using Testcontainers.PostgreSql;
 
 namespace Legacy.Maliev.CareerService.Tests.Startup;
 
+/// <summary>Checks private failure diagnostics through the actual production startup pipeline.</summary>
 public sealed class CareerStartupLoggingTests
 {
     private const string Sensitive = "candidate-private@example.invalid";
 
+    /// <summary>Checks database failures without provider exception text or stack disclosure.</summary>
+    /// <param name="path">The GET route used to trigger a real database read failure or controlled save failure against an uninitialized database.</param>
+    /// <param name="exceptionType">The safe exception type expected in the private incident: PostgresException for reads or DbUpdateException for saves.</param>
+    /// <returns>A task that completes when real database failures return 500 and retain only safe exception metadata without provider text, SQL, or stacks.</returns>
     [Theory]
     [InlineData("/Jobs/job-opening-status", "PostgresException")]
     [InlineData("/Jobs/acceptance-save", "DbUpdateException")]
@@ -45,7 +52,7 @@ public sealed class CareerStartupLoggingTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("PostgresException", body);
         using var failure = factory.Failure();
-        Assert.Equal(exceptionType, failure.RootElement.GetProperty("State").GetProperty("ExceptionType").GetString());
+        Assert.Equal(exceptionType, failure.RootElement.GetProperty("ExceptionType").GetString());
         Assert.All(factory.Logs.Lines, line =>
         {
             Assert.DoesNotContain("42P01", line);
@@ -56,6 +63,8 @@ public sealed class CareerStartupLoggingTests
         });
     }
 
+    /// <summary>Checks generic 500 responses and correlated redacted critical incidents.</summary>
+    /// <returns>A task that completes when the production 500 response and critical incident preserve correlation and runtime provenance while redacting sensitive data.</returns>
     [Fact]
     public async Task ProductionControllerFailure_ReturnsSafe500AndCorrelatedRedactedCriticalEvent()
     {
@@ -80,27 +89,31 @@ public sealed class CareerStartupLoggingTests
         Assert.Equal("career-acceptance-500", Assert.Single(response.Headers.GetValues("X-Correlation-ID")));
         using var failure = factory.Failure();
         var root = failure.RootElement;
-        var state = root.GetProperty("State");
-        Assert.Equal("Critical", root.GetProperty("LogLevel").GetString());
+        var state = root;
         Assert.Equal("CRITICAL", root.GetProperty("severity").GetString());
-        Assert.Equal("Legacy.Maliev.CareerService.Api", state.GetProperty("Service").GetString());
+        var entryAssembly = Assembly.GetEntryAssembly();
+        Assert.NotNull(entryAssembly);
+        Assert.Equal(entryAssembly.GetName().Name, root.GetProperty("service").GetString());
+        Assert.Equal(entryAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+            root.GetProperty("deploymentVersion").GetString());
         Assert.Equal("GET", state.GetProperty("Method").GetString());
-        Assert.Equal("Jobs/{offerId:int}", state.GetProperty("Path").GetString()?.TrimStart('/'));
+        Assert.False(root.TryGetProperty("Path", out _));
         Assert.Equal(500, state.GetProperty("StatusCode").GetInt32());
         Assert.Equal("Exception", state.GetProperty("ExceptionType").GetString());
         Assert.Equal(document.RootElement.GetProperty("traceId").GetString(), state.GetProperty("IncidentId").GetString());
-        Assert.Equal(TimeSpan.Zero, DateTimeOffset.Parse(state.GetProperty("OccurredAtUtc").GetString()!, CultureInfo.InvariantCulture).Offset);
-        Assert.Equal(TimeSpan.Zero, DateTimeOffset.Parse(root.GetProperty("Timestamp").GetString()!, CultureInfo.InvariantCulture).Offset);
-        Assert.Contains("0123456789abcdef0123456789abcdef", root.GetProperty("Scopes").GetRawText());
-        Assert.Contains("career-acceptance-500", root.GetProperty("Scopes").GetRawText());
+        Assert.Equal(TimeSpan.Zero, DateTimeOffset.Parse(root.GetProperty("occurredAtUtc").GetString()!, CultureInfo.InvariantCulture).Offset);
+        Assert.Equal("0123456789abcdef0123456789abcdef", root.GetProperty("traceId").GetString());
+        Assert.DoesNotContain("career-acceptance-500", failure.RootElement.GetRawText());
         Assert.All(factory.Logs.Lines, line =>
         {
             Assert.DoesNotContain(Sensitive, line);
             Assert.DoesNotContain("817263", line);
         });
-        Assert.Contains(factory.Logs.Lines, line => line.Contains("responded 500", StringComparison.Ordinal));
+        Assert.DoesNotContain(factory.Logs.Lines, line => line.Contains("responded 500", StringComparison.Ordinal));
     }
 
+    /// <summary>Checks anonymous reads, protected writes, and native dependencies after startup.</summary>
+    /// <returns>A task that completes when production startup preserves anonymous reads, protected writes, and the expected logging and legacy dependency registrations.</returns>
     [Fact]
     public async Task ProductionStartup_PreservesAnonymousReadsProtectedWritesAndNativeDependencies()
     {
@@ -117,7 +130,10 @@ public sealed class CareerStartupLoggingTests
         Assert.Contains(providers, name => name.Contains("OpenTelemetryLoggerProvider", StringComparison.Ordinal));
         Assert.DoesNotContain(providers, name => name.Contains("NLog", StringComparison.Ordinal));
         var options = factory.Services.GetRequiredService<IOptionsMonitor<ConsoleLoggerOptions>>();
-        Assert.Equal(MalievCloudJsonConsoleFormatter.FormatterName, options.CurrentValue.FormatterName);
+        Assert.Equal(CareerDiagnosticConsoleFormatter.FormatterName, options.CurrentValue.FormatterName);
+        var filters = factory.Services.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>().CurrentValue.Rules;
+        Assert.Contains(filters, rule => rule.ProviderName == typeof(ConsoleLoggerProvider).FullName
+            && rule.CategoryName is null && rule.LogLevel == LogLevel.Warning);
         var tracking = factory.Services.GetRequiredService<IOptions<LoggerFactoryOptions>>().Value.ActivityTrackingOptions;
         Assert.True(tracking.HasFlag(ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId | ActivityTrackingOptions.ParentId));
         using var dependencies = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,
@@ -128,6 +144,8 @@ public sealed class CareerStartupLoggingTests
             || name.Contains("NLog", StringComparison.Ordinal) || name.Contains("LoggerService", StringComparison.Ordinal));
     }
 
+    /// <summary>Checks that failures after response start preserve status and existing body bytes.</summary>
+    /// <returns>A task that completes when a post-start exception leaves the 202 status and accepted body intact while emitting a redacted incident.</returns>
     [Fact]
     public async Task ProductionStartedResponse_DoesNotAppendExceptionBodyOrOverwriteStatus()
     {
@@ -137,12 +155,374 @@ public sealed class CareerStartupLoggingTests
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("accepted", await response.Content.ReadAsStringAsync());
         using var failure = factory.Failure();
-        Assert.Equal(202, failure.RootElement.GetProperty("State").GetProperty("StatusCode").GetInt32());
+        Assert.Equal(202, failure.RootElement.GetProperty("StatusCode").GetInt32());
         Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
-        Assert.Contains(factory.Logs.Lines, line => line.Contains("Response has already started", StringComparison.Ordinal));
+        Assert.Single(factory.Logs.Lines, line =>
+        {
+            using var warning = JsonDocument.Parse(line);
+            var root = warning.RootElement;
+            return root.GetProperty("severity").GetString() == "WARNING"
+                && root.GetProperty("logger").GetString() == typeof(global::Maliev.Aspire.ServiceDefaults.Middleware.ExceptionHandlingMiddleware).FullName
+                && root.TryGetProperty("ExceptionType", out var type) && type.GetString() == "Exception";
+        });
     }
 
-    private sealed class CareerFactory(string? databaseConnection = null) : WebApplicationFactory<Program>
+    /// <summary>Checks the direct loopback nonce diagnostic's original empty problem response.</summary>
+    /// <returns>A task that completes when the direct-loopback nonce probe returns its original empty problem response and emits one synthetic incident.</returns>
+    [Fact]
+    public async Task ProductionDiagnostic_DirectLoopbackNonce_ReturnsOriginalEmptyProblemFailure()
+    {
+        using var factory = new CareerFactory(useDiagnosticPeer: true, diagnosticPeer: "127.0.0.1");
+        using var client = factory.CreateClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        const string nonce = "0123456789abcdef0123456789abcdef";
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability?private=" + Sensitive);
+        request.Headers.Add("X-Maliev-Diagnostic-Id", nonce);
+        using var response = await client.SendAsync(request, deadline.Token);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(deadline.Token));
+        Assert.Equal(nonce, Assert.Single(response.Headers.GetValues("X-Maliev-Diagnostic-Id")));
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("noindex", Assert.Single(response.Headers.GetValues("X-Robots-Tag")));
+        Assert.Single(factory.Logs.Lines, line => line.Contains("ObservabilityPipelineProbe", StringComparison.Ordinal));
+        Assert.Contains(factory.Logs.Lines, line => line.Contains("UnhandledRequestFailure", StringComparison.Ordinal));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks private 404 responses for invalid diagnostic methods, peers, or nonces.</summary>
+    /// <param name="method">The HTTP verb used to call /internal/diagnostics/observability, including a rejected POST.</param>
+    /// <param name="peer">The simulated remote IP address, or null, used to verify that only a direct loopback peer can pass the diagnostic gate.</param>
+    /// <param name="nonce">The X-Maliev-Diagnostic-Id header value, or null when omitted, used to exercise invalid or otherwise disallowed probe requests.</param>
+    /// <returns>A task that completes when disallowed probe requests return a private empty 404 without generating synthetic failures.</returns>
+    [Theory]
+    [InlineData("GET", "127.0.0.1", null)]
+    [InlineData("GET", "127.0.0.1", "invalid-nonce")]
+    [InlineData("POST", "127.0.0.1", "0123456789abcdef0123456789abcdef")]
+    [InlineData("GET", "203.0.113.17", "0123456789abcdef0123456789abcdef")]
+    [InlineData("GET", null, "0123456789abcdef0123456789abcdef")]
+    public async Task ProductionDiagnostic_InvalidMethodPeerOrNonce_IsPrivate404WithoutSyntheticFailure(
+        string method, string? peer, string? nonce)
+    {
+        using var factory = new CareerFactory(useDiagnosticPeer: true, diagnosticPeer: peer);
+        using var client = factory.CreateClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var request = new HttpRequestMessage(new HttpMethod(method), "/internal/diagnostics/observability");
+        if (nonce is not null)
+        {
+            request.Headers.Add("X-Maliev-Diagnostic-Id", nonce);
+        }
+        using var response = await client.SendAsync(request, deadline.Token);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync(deadline.Token));
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("noindex", Assert.Single(response.Headers.GetValues("X-Robots-Tag")));
+        Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        Assert.DoesNotContain(factory.Logs.Lines, line => line.Contains("ObservabilityPipelineProbe", StringComparison.Ordinal)
+            || line.Contains("UnhandledRequestFailure", StringComparison.Ordinal));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks diagnostic throttling without creating a second synthetic failure.</summary>
+    /// <returns>A task that completes when a second diagnostic nonce within one minute returns 429 without generating another synthetic failure.</returns>
+    [Fact]
+    public async Task ProductionDiagnostic_SecondNonceWithinOneMinute_Is429WithoutSecondSyntheticFailure()
+    {
+        using var factory = new CareerFactory(useDiagnosticPeer: true, diagnosticPeer: "127.0.0.1");
+        using var client = factory.CreateClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability");
+        firstRequest.Headers.Add("X-Maliev-Diagnostic-Id", "0123456789abcdef0123456789abcdef");
+        using var first = await client.SendAsync(firstRequest, deadline.Token);
+        Assert.Equal(HttpStatusCode.InternalServerError, first.StatusCode);
+        Assert.Equal(string.Empty, await first.Content.ReadAsStringAsync(deadline.Token));
+        using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability");
+        secondRequest.Headers.Add("X-Maliev-Diagnostic-Id", "abcdef0123456789abcdef0123456789");
+        using var second = await client.SendAsync(secondRequest, deadline.Token);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+        Assert.Equal(string.Empty, await second.Content.ReadAsStringAsync(deadline.Token));
+        Assert.Equal("no-store", second.Headers.CacheControl?.ToString());
+        Assert.Equal("noindex", Assert.Single(second.Headers.GetValues("X-Robots-Tag")));
+        Assert.False(second.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        Assert.Single(factory.Logs.Lines, line => line.Contains("ObservabilityPipelineProbe", StringComparison.Ordinal));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks stable per-host headers and case-insensitive registered health paths.</summary>
+    /// <param name="prefix">The /Jobs or /jobs route prefix used to check case-insensitive registered health matching.</param>
+    /// <returns>A task that completes when liveness and readiness headers remain stable within one host and distinct across hosts.</returns>
+    [Theory]
+    [InlineData("/Jobs")]
+    [InlineData("/jobs")]
+    public async Task ProductionCompletedObservation_RegisteredHealthHeadersAreStablePerHostAndCaseInsensitive(string prefix)
+    {
+        using var factory = new CareerFactory(completedObservation: new CompletedObservationFixture());
+        using var client = factory.CreateClient();
+        using var liveness = await ObservedRequestAsync(client, prefix + "/liveness");
+        using var readiness = await ObservedRequestAsync(client, prefix + "/readiness");
+        Assert.Equal(HttpStatusCode.OK, liveness.StatusCode);
+        Assert.Equal("Healthy", await liveness.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, readiness.StatusCode);
+        var instance = AssertHealthInstance(liveness);
+        Assert.Equal(instance, AssertHealthInstance(readiness));
+        using var other = new CareerFactory(completedObservation: new CompletedObservationFixture());
+        using var otherClient = other.CreateClient();
+        using var otherLiveness = await ObservedRequestAsync(otherClient, prefix + "/liveness");
+        Assert.Equal(HttpStatusCode.OK, otherLiveness.StatusCode);
+        Assert.NotEqual(instance, AssertHealthInstance(otherLiveness));
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        factory.Career.VerifyNoOtherCalls();
+        other.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks completed 5xx observations without recording sensitive values.</summary>
+    /// <returns>A task that completes when each handled 5xx response produces one safe completed-operation observation and non-5xx responses produce none.</returns>
+    [Fact]
+    public async Task ProductionCompletedObservation_Handled5xxRecordsEveryResponseWithoutSensitiveValues()
+    {
+        var fixture = new CompletedObservationFixture();
+        using var factory = new CareerFactory(completedObservation: fixture);
+        using var client = factory.CreateClient();
+        foreach (var status in new[] { 503, 503, 200, 400, 502 })
+        {
+            fixture.ResponseStatus = status;
+            using var response = await ObservedRequestAsync(client, $"/Jobs/acceptance-observation/handled/{Sensitive}?search={Sensitive}");
+            Assert.Equal((HttpStatusCode)status, response.StatusCode);
+            Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+            Assert.False(response.Headers.Contains("X-Maliev-Health-Instance"));
+        }
+        var events = ObservationEvents(factory, "HandledOperationFailure");
+        Assert.Equal(new[] { 503, 503, 502 }, events.Select(root => root.GetProperty("StatusCode").GetInt32()).ToArray());
+        Assert.All(events, root =>
+        {
+            Assert.Equal("ERROR", root.GetProperty("severity").GetString());
+            Assert.Equal("HttpResponse", root.GetProperty("Operation").GetString());
+        });
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks five-minute health buckets and reset after recovery.</summary>
+    /// <returns>A task that completes when health suffix failures throttle by five-minute bucket and resume after status changes or recovery.</returns>
+    [Fact]
+    public async Task ProductionCompletedObservation_HealthSuffixBucketsThrottleAtFiveMinutesAndResetOnRecovery()
+    {
+        var fixture = new CompletedObservationFixture();
+        using var factory = new CareerFactory(completedObservation: fixture);
+        using var client = factory.CreateClient();
+        async Task ProbeAsync(string operation, int status)
+        {
+            fixture.ResponseStatus = status;
+            using var response = await ObservedRequestAsync(client, $"/Jobs/acceptance-observation/{operation}?search={Sensitive}");
+            Assert.Equal((HttpStatusCode)status, response.StatusCode);
+            Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+            // Suffix classification is distinct from the registered-health header policy.
+            Assert.False(response.Headers.Contains("X-Maliev-Health-Instance"));
+        }
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("liveness", 503);
+        Assert.Equal(2, ObservationEvents(factory, "HealthProbeFailure").Length);
+        fixture.Advance(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(1));
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("liveness", 503);
+        Assert.Equal(2, ObservationEvents(factory, "HealthProbeFailure").Length);
+        fixture.Advance(TimeSpan.FromSeconds(1));
+        await ProbeAsync("readiness", 503);
+        await ProbeAsync("liveness", 503);
+        Assert.Equal(4, ObservationEvents(factory, "HealthProbeFailure").Length);
+        await ProbeAsync("readiness", 502);
+        Assert.Equal(5, ObservationEvents(factory, "HealthProbeFailure").Length);
+        await ProbeAsync("readiness", 200);
+        await ProbeAsync("readiness", 502);
+        var events = ObservationEvents(factory, "HealthProbeFailure");
+        Assert.Equal(new[] { "Readiness", "Liveness", "Readiness", "Liveness", "Readiness", "Readiness" },
+            events.Select(root => root.GetProperty("Operation").GetString()).ToArray());
+        Assert.Equal(new[] { 503, 503, 503, 503, 502, 502 },
+            events.Select(root => root.GetProperty("StatusCode").GetInt32()).ToArray());
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks readiness recovery without replacing the application instance.</summary>
+    /// <returns>A task that completes when registered readiness failure and recovery preserve the same instance header and expected failure observations.</returns>
+    [Fact]
+    public async Task ProductionCompletedObservation_RegisteredReadinessFailureRecoversWithoutChangingInstance()
+    {
+        var fixture = new CompletedObservationFixture();
+        using var factory = new CareerFactory(completedObservation: fixture);
+        using var client = factory.CreateClient();
+        string? instance = null;
+        foreach (var healthy in new[] { true, false, false, true, false })
+        {
+            fixture.ReadinessHealthy = healthy;
+            using var response = await ObservedRequestAsync(client, $"/Jobs/readiness?search={Sensitive}");
+            Assert.Equal(healthy ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            var actualInstance = AssertHealthInstance(response);
+            instance ??= actualInstance;
+            Assert.Equal(instance, actualInstance);
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(healthy ? "Healthy" : "Unhealthy", document.RootElement.GetProperty("status").GetString());
+            Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        }
+        var events = ObservationEvents(factory, "HealthProbeFailure");
+        Assert.Equal(2, events.Length);
+        Assert.All(events, root =>
+        {
+            Assert.Equal("Readiness", root.GetProperty("Operation").GetString());
+            Assert.Equal(503, root.GetProperty("StatusCode").GetInt32());
+        });
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks that unregistered or non-GET health paths receive no instance header.</summary>
+    /// <param name="method">The HTTP verb used for the unregistered or non-GET health-shaped route.</param>
+    /// <param name="path">The request path exercising unrelated, Aspire, non-GET, or test-only health suffix routing.</param>
+    /// <param name="status">The expected numeric HTTP status for that method and route: 200, 404, or 405.</param>
+    /// <returns>A task that completes when the expected response omits registered-health instance headers and emits no failure observations.</returns>
+    [Theory]
+    [InlineData("GET", "/Other/liveness", 404)]
+    [InlineData("GET", "/Jobs/aspire-liveness", 200)]
+    [InlineData("POST", "/Jobs/liveness", 405)]
+    [InlineData("GET", "/Jobs/acceptance-observation/readiness", 200)]
+    public async Task ProductionCompletedObservation_UnregisteredOrNonGetHealthHasNoInstanceHeader(string method, string path, int status)
+    {
+        using var factory = new CareerFactory(completedObservation: new CompletedObservationFixture { ResponseStatus = 200 });
+        using var client = factory.CreateClient();
+        using var response = await ObservedRequestAsync(client, path, new HttpMethod(method));
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.False(response.Headers.Contains("X-Maliev-Health-Instance"));
+        Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.Empty(ObservationEvents(factory, "UnhandledRequestFailure"));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Checks one outer incident for a thrown business failure without a completed duplicate.</summary>
+    /// <returns>A task that completes when a thrown business failure produces one outer incident without a duplicate completed-response observation.</returns>
+    [Fact]
+    public async Task ProductionCompletedObservation_ThrownBusinessFailureHasOneOuterIncidentAndNoCompletedDuplicate()
+    {
+        using var factory = new CareerFactory(completedObservation: new CompletedObservationFixture());
+        factory.Career.Setup(service => service.GetOfferByIdAsync(817263, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception(Sensitive));
+        using var client = factory.CreateClient();
+        using var response = await ObservedRequestAsync(client, $"/Jobs/817263?search={Sensitive}");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("An internal server error occurred", document.RootElement.GetProperty("error").GetString());
+        Assert.Single(ObservationEvents(factory, "UnhandledRequestFailure"));
+        Assert.Empty(ObservationEvents(factory, "HandledOperationFailure"));
+        Assert.Empty(ObservationEvents(factory, "HealthProbeFailure"));
+        Assert.All(factory.Logs.Lines, line => Assert.DoesNotContain(Sensitive, line));
+        factory.Career.Verify(service => service.GetOfferByIdAsync(817263, It.IsAny<CancellationToken>()), Times.Once);
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    private static async Task<HttpResponseMessage> ObservedRequestAsync(HttpClient client, string path, HttpMethod? method = null)
+    {
+        using var request = new HttpRequestMessage(method ?? HttpMethod.Get, path);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        return await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, deadline.Token);
+    }
+
+    private static string AssertHealthInstance(HttpResponseMessage response)
+    {
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var instance = Assert.Single(response.Headers.GetValues("X-Maliev-Health-Instance"));
+        Assert.True(Guid.TryParseExact(instance, "N", out _));
+        Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        return instance;
+    }
+
+    /// <summary>Checks configured private formatting and rejection of arbitrary fields.</summary>
+    [Fact]
+    public void ProductionPrivateFormatter_UsesConfiguredFormatterAndDropsArbitraryFields()
+    {
+        const string messageSentinel = "formatter-message@example.invalid";
+        const string stateSentinel = "formatter-state@example.invalid";
+        const string scopeSentinel = "formatter-scope@example.invalid";
+        using var factory = new CareerFactory();
+        var logger = factory.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Career.PrivateFormatterSourceObligation");
+        using var scope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["CustomerEmail"] = scopeSentinel,
+            ["Operation"] = "SourceWarningProbe"
+        });
+        logger.Log(LogLevel.Warning, new EventId(1901, "SourceWarningProbe"),
+            new Dictionary<string, object?>
+            {
+                ["EventName"] = "SourceWarningProbe",
+                ["Operation"] = "SourceWarningProbe",
+                ["CustomerEmail"] = stateSentinel,
+                ["StatusCode"] = 503
+            }, new InvalidOperationException("formatter-exception@example.invalid"), (_, _) => messageSentinel);
+        var line = Assert.Single(factory.Logs.Lines, value =>
+            value.Contains("SourceWarningProbe", StringComparison.Ordinal));
+        using var identity = JsonDocument.Parse(line);
+        Assert.Equal(1901, identity.RootElement.GetProperty("eventId").GetInt32());
+        Assert.DoesNotContain(messageSentinel, line, StringComparison.Ordinal);
+        Assert.DoesNotContain(stateSentinel, line, StringComparison.Ordinal);
+        Assert.DoesNotContain(scopeSentinel, line, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+        Assert.Equal("WARNING", root.GetProperty("severity").GetString());
+        Assert.Equal("SourceWarningProbe", root.GetProperty("EventName").GetString());
+        Assert.Equal(503, root.GetProperty("StatusCode").GetInt32());
+        Assert.False(root.TryGetProperty("CustomerEmail", out _));
+        factory.Career.VerifyNoOtherCalls();
+    }
+
+    private static JsonElement[] ObservationEvents(CareerFactory factory, string eventName)
+    {
+        var events = new List<JsonElement>();
+        foreach (var line in factory.Logs.Lines)
+        {
+            using var document = JsonDocument.Parse(line);
+            var root = document.RootElement;
+            if (root.TryGetProperty("EventName", out var name) && name.GetString() == eventName)
+            {
+                events.Add(root.Clone());
+            }
+        }
+        return events.ToArray();
+    }
+
+    private sealed class ControlledDiagnosticPeerStartupFilter(string? peer) : IStartupFilter
+    {
+        public Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> Configure(
+            Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> next)
+        {
+            return app =>
+            {
+                Microsoft.AspNetCore.Builder.UseExtensions.Use(app, async (context, continuation) =>
+                {
+                    context.Connection.RemoteIpAddress = peer is null ? null : IPAddress.Parse(peer);
+                    await continuation(context);
+                });
+                next(app);
+            };
+        }
+    }
+
+    private sealed class CareerFactory(
+        string? databaseConnection = null, bool useDiagnosticPeer = false, string? diagnosticPeer = null,
+        CompletedObservationFixture? completedObservation = null)
+        : WebApplicationFactory<Program>
     {
         private readonly RSA _rsa = RSA.Create(2048);
         public Mock<ICareerService> Career { get; } = new(MockBehavior.Strict);
@@ -158,10 +538,25 @@ public sealed class CareerStartupLoggingTests
                     services.RemoveAll<ICareerService>();
                     services.AddSingleton(Career.Object);
                 }
+                if (useDiagnosticPeer)
+                {
+                    services.AddSingleton<IStartupFilter>(new ControlledDiagnosticPeerStartupFilter(diagnosticPeer));
+                }
+                if (completedObservation is { } observation)
+                {
+                    services.RemoveAll<TimeProvider>();
+                    services.AddSingleton<TimeProvider>(observation);
+                    services.AddSingleton(observation);
+                    // Controlled health results only; this does not prove real dependency readiness.
+                    services.Configure<HealthCheckServiceOptions>(options => options.Registrations.Clear());
+                    services.AddHealthChecks().AddCheck("controlled-observation", () =>
+                        observation.ReadinessHealthy ? HealthCheckResult.Healthy() : HealthCheckResult.Unhealthy("controlled"));
+                }
                 services.AddControllers().AddApplicationPart(typeof(StartedResponseController).Assembly);
                 services.AddSingleton<ILoggerProvider>(provider =>
                 {
-                    Logs.Formatter = new MalievCloudJsonConsoleFormatter(provider.GetRequiredService<IOptionsMonitor<JsonConsoleFormatterOptions>>());
+                    Logs.Formatter = provider.GetServices<ConsoleFormatter>().Single(formatter =>
+                        formatter.Name == provider.GetRequiredService<IOptionsMonitor<ConsoleLoggerOptions>>().CurrentValue.FormatterName);
                     return Logs;
                 });
             });
@@ -196,7 +591,7 @@ public sealed class CareerStartupLoggingTests
     {
         private IExternalScopeProvider _scopes = new LoggerExternalScopeProvider();
         public ConcurrentQueue<string> Lines { get; } = new();
-        public MalievCloudJsonConsoleFormatter Formatter { get; set; } = null!;
+        public ConsoleFormatter Formatter { get; set; } = null!;
         public ILogger CreateLogger(string categoryName) => new CaptureLogger(this, categoryName);
         public void SetScopeProvider(IExternalScopeProvider scopeProvider) => _scopes = scopeProvider;
         public void Dispose() { }
@@ -209,16 +604,20 @@ public sealed class CareerStartupLoggingTests
             {
                 using var writer = new StringWriter(CultureInfo.InvariantCulture);
                 provider.Formatter.Write(new LogEntry<TState>(level, category, eventId, state, exception, formatter), provider._scopes, writer);
-                provider.Lines.Enqueue(writer.ToString());
+                if (writer.GetStringBuilder().Length != 0) provider.Lines.Enqueue(writer.ToString());
             }
         }
     }
 }
 
 // Test-only endpoint exercises a started response through the actual production startup pipeline.
+/// <summary>Exposes test-only endpoints for save failures and already-started responses.</summary>
 [ApiController]
 public sealed class StartedResponseController : ControllerBase
 {
+    /// <summary>Triggers a controlled invalid database save through the production pipeline.</summary>
+    /// <param name="database">The injected Career database context used to add a level and trigger the controlled save failure.</param>
+    /// <returns>A task that completes if the controlled database save succeeds, or faults with the save exception observed by the production middleware.</returns>
     [HttpGet("Jobs/acceptance-save")]
     public async Task SaveAsync([FromServices] CareerDbContext database)
     {
@@ -226,6 +625,20 @@ public sealed class StartedResponseController : ControllerBase
         await database.SaveChangesAsync();
     }
 
+    /// <summary>Starts a controlled-status response for completed-observation tests.</summary>
+    /// <param name="fixture">The test observation controls supplying the HTTP status to set before starting the response.</param>
+    /// <returns>A task that completes when the response has started with the fixture-controlled status.</returns>
+    [HttpGet("Jobs/acceptance-observation/handled/{value}")]
+    [HttpGet("Jobs/acceptance-observation/readiness")]
+    [HttpGet("Jobs/acceptance-observation/liveness")]
+    public async Task CompleteObservationAsync([FromServices] CompletedObservationFixture fixture)
+    {
+        Response.StatusCode = fixture.ResponseStatus;
+        await Response.StartAsync();
+    }
+
+    /// <summary>Writes an accepted response before throwing a controlled failure.</summary>
+    /// <returns>A task that faults with the controlled exception after the 202 accepted body has been written and flushed.</returns>
     [HttpGet("Jobs/acceptance-started/{value}")]
     public async Task GetAsync()
     {
@@ -234,4 +647,21 @@ public sealed class StartedResponseController : ControllerBase
         await Response.Body.FlushAsync();
         throw new Exception("candidate-private@example.invalid");
     }
+}
+
+// Test-owned clock and health-result control; no timer, worker, connection or production selector.
+/// <summary>Controls time and readiness for completed-observation acceptance tests.</summary>
+public sealed class CompletedObservationFixture : TimeProvider
+{
+    private DateTimeOffset _now = new(2026, 10, 10, 0, 0, 0, TimeSpan.Zero);
+    /// <summary>Gets or sets the response status returned by the controlled endpoint.</summary>
+    public int ResponseStatus { get; set; } = 503;
+    /// <summary>Gets or sets the controlled readiness health result.</summary>
+    public bool ReadinessHealthy { get; set; } = true;
+    /// <summary>Returns the fixture's deterministic UTC time.</summary>
+    /// <returns>The deterministic UTC instant currently held by the observation fixture.</returns>
+    public override DateTimeOffset GetUtcNow() => _now;
+    /// <summary>Moves the fixture clock forward by the requested duration.</summary>
+    /// <param name="duration">The time interval added to the deterministic UTC clock to exercise throttle expiry and recovery timing.</param>
+    public void Advance(TimeSpan duration) => _now += duration;
 }

@@ -6,8 +6,11 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Legacy.Maliev.CareerService.Tests.Application;
 
+/// <summary>Checks application-level offer projection, creation fields, and open-position rules.</summary>
 public sealed class CareerApplicationServiceTests
 {
+    /// <summary>Checks that only offers explicitly marked unfilled count as open positions.</summary>
+    /// <returns>A task that completes after checking that only offers explicitly marked unfilled count as open positions.</returns>
     [Fact]
     public async Task HasOpenPositionsAsync_preserves_legacy_unfilled_offer_rule()
     {
@@ -18,6 +21,8 @@ public sealed class CareerApplicationServiceTests
         Assert.True(await service.HasOpenPositionsAsync(CancellationToken.None));
     }
 
+    /// <summary>Checks search, sort, paging, and linked-level projection through the application service.</summary>
+    /// <returns>A task that completes after checking search, sort, paging, and linked-level projection through the application service.</returns>
     [Fact]
     public async Task GetPaginatedAsync_preserves_search_sort_and_level_projection()
     {
@@ -35,6 +40,8 @@ public sealed class CareerApplicationServiceTests
         Assert.False(page.HasNextPage);
     }
 
+    /// <summary>Checks that offer creation preserves the original field whitelist and server timestamps.</summary>
+    /// <returns>A task that completes after checking that offer creation preserves the original field whitelist and server timestamps.</returns>
     [Fact]
     public async Task CreateOfferAsync_preserves_legacy_offer_fields_and_timestamps()
     {

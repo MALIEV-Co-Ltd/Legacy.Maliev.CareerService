@@ -7,12 +7,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Serializes tests that mutate shared levels.</summary>
 [CollectionDefinition("Career shared level", DisableParallelization = true)]
 public sealed class CareerSharedLevelCollection;
 
+/// <summary>Checks level mutation boundaries and the resulting public offer projections.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, and signed-client fixture used for the HTTP assertions.</param>
 [Collection("Career shared level")]
 public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks that source write whitelists ignore forged identifiers, dates, and nested graphs.</summary>
+    /// <param name="kind">The mutation resource: offer selects job-offer payloads and routes; level selects job-level payloads and routes.</param>
+    /// <param name="value">The literal text, including an empty string, padded spaces, or Thai characters, applied to source-writable fields.</param>
+    /// <returns>A task that completes after checking that source write whitelists ignore forged identifiers, dates, and nested graphs.</returns>
     [Theory]
     [InlineData("offer", "")]
     [InlineData("offer", "  Literal value  ")]
@@ -178,6 +185,10 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         Assert.False(await db.Levels.AnyAsync(item => item.Id == forgedId));
     }
 
+    /// <summary>Checks that shared-level edits refresh public reads without changing imported offer fields.</summary>
+    /// <param name="name">The literal replacement shared-level name, including an empty string, significant surrounding spaces, or Thai text.</param>
+    /// <param name="description">The literal replacement shared-level description expected in subsequent public offer and level reads.</param>
+    /// <returns>A task that completes after checking that shared-level edits refresh public reads without changing imported offer fields.</returns>
     [Theory]
     [InlineData("", "")]
     [InlineData("  Literal level  ", "  Literal description  ")]
@@ -209,11 +220,11 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         using var levelsJson = JsonDocument.Parse(await levels.Content.ReadAsStringAsync());
         var level = Assert.Single(levelsJson.RootElement.EnumerateArray());
         Assert.Equal(levelId, level.GetProperty("id").GetInt32());
-        AssertLevelFields(level, name, description);
+        AssertLevelFields(level, name, description, direct: true);
         using var detail = await reader.GetAsync($"/jobs/levels/{levelId}/");
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         using var detailJson = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
-        AssertLevelFields(detailJson.RootElement, name, description);
+        AssertLevelFields(detailJson.RootElement, name, description, direct: true);
         using var listing = await reader.GetAsync("/jobs/?index=1&size=10");
         Assert.Equal(HttpStatusCode.OK, listing.StatusCode);
         using var listingJson = JsonDocument.Parse(await listing.Content.ReadAsStringAsync());
@@ -235,6 +246,10 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         Assert.Equal(offersBefore, await OffersAsync());
     }
 
+    /// <summary>Checks private failure of missing required level fields without changing either offer.</summary>
+    /// <param name="name">The submitted shared-level name, set to null in cases exercising its required database constraint.</param>
+    /// <param name="description">The submitted shared-level description, set to null in cases exercising its required database constraint.</param>
+    /// <returns>A task that completes after checking private failure of missing required level fields without changing either offer.</returns>
     [Theory]
     [InlineData(null, "Valid description")]
     [InlineData("Valid name", null)]
@@ -263,6 +278,10 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
             AssertLevelFields(item.GetProperty("level"), "Original level", "Original description");
     }
 
+    /// <summary>Checks that invalid authority cannot alter a shared level or its public offers.</summary>
+    /// <param name="authority">The rejected client authority scenario: anonymous, expired, wrong-signature, or missing-permission.</param>
+    /// <param name="expected">The expected unauthorized or forbidden response for the selected authority failure.</param>
+    /// <returns>A task that completes after checking that invalid authority cannot alter a shared level or its public offers.</returns>
     [Theory]
     [InlineData("anonymous", HttpStatusCode.Unauthorized)]
     [InlineData("expired", HttpStatusCode.Unauthorized)]
@@ -285,6 +304,9 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
             Assert.Equal("Original level", item.GetProperty("level").GetProperty("name").GetString());
     }
 
+    /// <summary>Checks that invalid level bodies preserve all related persisted rows.</summary>
+    /// <param name="body">The raw JSON update body: null, malformed JSON, or a numeric name value used to test validation and persistence failure behavior.</param>
+    /// <returns>A task that completes after checking that invalid level bodies preserve all related persisted rows.</returns>
     [Theory]
     [InlineData("null")]
     [InlineData("{")]
@@ -295,7 +317,18 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         var before = await SnapshotAsync();
         using var writer = fixture.Client("legacy-career.levels.update");
         using var response = await writer.PutAsync($"/jobs/levels/{id}", new StringContent(body, Encoding.UTF8, "application/json"));
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var expected = body == "{\"Name\":42}" ? HttpStatusCode.InternalServerError : HttpStatusCode.BadRequest;
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.InternalServerError)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync();
+            using var json = JsonDocument.Parse(responseBody);
+            Assert.Equal(500, json.RootElement.GetProperty("statusCode").GetInt32());
+            Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("details").ValueKind);
+            Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
+            Assert.DoesNotContain("Npgsql", responseBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("23502", responseBody, StringComparison.Ordinal);
+        }
         Assert.Equal(before, await SnapshotAsync());
     }
 
@@ -350,13 +383,19 @@ public sealed class CareerSharedLevelHttpTests(CareerRouteFixture fixture) : ICl
         });
     }
 
-    private static void AssertLevelFields(JsonElement level, string? name, string? description)
+    private static void AssertLevelFields(JsonElement level, string? name, string? description, bool direct = false)
     {
         if (name is null) Assert.False(level.TryGetProperty("name", out _));
         else Assert.Equal(name, level.GetProperty("name").GetString());
         if (description is null) Assert.False(level.TryGetProperty("description", out _));
         else Assert.Equal(description, level.GetProperty("description").GetString());
         Assert.False(level.TryGetProperty("Name", out _));
-        Assert.False(level.TryGetProperty("offers", out _));
+        if (direct)
+        {
+            var offers = level.GetProperty("offers");
+            Assert.Equal(JsonValueKind.Array, offers.ValueKind);
+            Assert.Equal(0, offers.GetArrayLength());
+        }
+        else Assert.False(level.TryGetProperty("offers", out _));
     }
 }

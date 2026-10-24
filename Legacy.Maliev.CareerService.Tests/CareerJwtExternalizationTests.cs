@@ -15,12 +15,14 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Legacy.Maliev.CareerService.Tests;
 
+/// <summary>Checks Career JWT configuration and the boundary between public reads and protected writes.</summary>
 public sealed class CareerJwtExternalizationTests
 {
     private const string Issuer = "https://iam.maliev.com";
     private const string Audience = "maliev-services";
     private const string LegacyTestKey = "test-only-legacy-key-of-at-least-32-bytes"; // gitleaks:allow
 
+    /// <summary>Checks external public-key configuration while preserving anonymous listing access.</summary>
     [Fact]
     public void CareerApi_UsesExternalPublicKeyAndRetainsPublicReadBoundary()
     {
@@ -50,6 +52,7 @@ public sealed class CareerJwtExternalizationTests
             .GetCustomAttributes(typeof(AllowAnonymousAttribute), true));
     }
 
+    /// <summary>Checks issuer, audience, and RS256 validation against an Auth-issued token.</summary>
     [Fact]
     public void ProductionCareerValidator_AcceptsOnlyAuthIssuedRs256ForItsIssuerAndAudience()
     {
@@ -92,6 +95,7 @@ public sealed class CareerJwtExternalizationTests
             Token(rsa, SecurityAlgorithms.RsaSha256, audience: "other-services"), parameters, out _));
     }
 
+    /// <summary>Checks that production validation refuses a legacy symmetric signing key.</summary>
     [Fact]
     public void ProductionCareerValidator_DoesNotFallBackToLegacySymmetricKey()
     {

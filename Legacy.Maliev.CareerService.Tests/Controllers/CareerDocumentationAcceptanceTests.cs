@@ -4,9 +4,15 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks served Career documentation against the actual HTTP and authorization contracts.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, and signed-client fixture used for the HTTP assertions.</param>
 public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixture)
     : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks that documentation exposure follows the configured environment boundary.</summary>
+    /// <param name="environment">The host environment used to request the OpenAPI document: Development, Staging, or Production.</param>
+    /// <param name="exposed">Whether the OpenAPI endpoint is expected to be available in the selected environment.</param>
+    /// <returns>A task that completes after checking that documentation exposure follows the configured environment boundary.</returns>
     [Theory]
     [InlineData("Development", true)]
     [InlineData("Staging", true)]
@@ -22,6 +28,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         Assert.Equal("Legacy MALIEV JobOffer Service API", body.RootElement.GetProperty("info").GetProperty("title").GetString());
     }
 
+    /// <summary>Checks maintained operations and their actual authorization requirements.</summary>
+    /// <returns>A task that completes after checking maintained operations and their actual authorization requirements.</returns>
     [Fact]
     public async Task Documentation_DescribesMaintainedOperationsAndActualAuthorization()
     {
@@ -53,6 +61,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         Assert.Equal("bearer", bearer.GetProperty("scheme").GetString());
     }
 
+    /// <summary>Checks documentation for paging and literal search parameters.</summary>
+    /// <returns>A task that completes after checking documentation for paging and literal search parameters.</returns>
     [Fact]
     public async Task Documentation_ExplainsPageAndLiteralSearchParameters()
     {
@@ -67,6 +77,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         }
     }
 
+    /// <summary>Checks documented creation responses and concurrency failures.</summary>
+    /// <returns>A task that completes after checking documented creation responses and concurrency failures.</returns>
     [Fact]
     public async Task Documentation_DescribesActualCreationAndConcurrencyResults()
     {
@@ -85,6 +97,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         }
     }
 
+    /// <summary>Checks offer payload documentation and its reference to an existing level.</summary>
+    /// <returns>A task that completes after checking offer payload documentation and its reference to an existing level.</returns>
     [Fact]
     public async Task Documentation_ExplainsJobPayloadAndItsExistingLevelReference()
     {
@@ -107,6 +121,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
             $"Missing existing level-reference guidance: {level}");
     }
 
+    /// <summary>Checks documentation for the exact public open-position boolean.</summary>
+    /// <returns>A task that completes after checking documentation for the exact public open-position boolean.</returns>
     [Fact]
     public async Task Documentation_ExplainsExactPublicOpenPositionBoolean()
     {
@@ -119,6 +135,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         Assert.Equal("boolean", response.GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("type").GetString());
     }
 
+    /// <summary>Checks that critical deletion documentation describes a fresh live permission decision.</summary>
+    /// <returns>A task that completes after checking that critical deletion documentation describes a fresh live permission decision.</returns>
     [Fact]
     public async Task Documentation_ExplainsExistingLiveAuthorizationForCriticalDeletions()
     {
@@ -133,6 +151,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
         }
     }
 
+    /// <summary>Checks that body operations describe request payloads rather than cancellation tokens.</summary>
+    /// <returns>A task that completes after checking that body operations describe request payloads rather than cancellation tokens.</returns>
     [Fact]
     public async Task Documentation_DescribesPayloadInsteadOfCancellationForBodyOperations()
     {
@@ -147,6 +167,8 @@ public sealed class CareerDocumentationAcceptanceTests(CareerRouteFixture fixtur
             Assert.DoesNotContain("cancellation", description.GetString(), StringComparison.OrdinalIgnoreCase);
         }
     }
+    /// <summary>Checks the documented level-creation example against the accepted Thai payload.</summary>
+    /// <returns>A task that completes after checking the documented level-creation example against the accepted Thai payload.</returns>
     [Fact]
     public async Task Documentation_LevelCreationExampleMatchesAcceptedThaiPayload()
     {

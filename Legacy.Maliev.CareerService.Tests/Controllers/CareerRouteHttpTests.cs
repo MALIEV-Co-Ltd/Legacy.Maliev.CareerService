@@ -20,8 +20,12 @@ using Testcontainers.PostgreSql;
 
 namespace Legacy.Maliev.CareerService.Tests.Controllers;
 
+/// <summary>Checks original Career routes, literal payloads, sorting, and persisted graph behavior.</summary>
+/// <param name="fixture">The shared PostgreSQL, Redis, and signed-client fixture used for the HTTP assertions.</param>
 public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFixture<CareerRouteFixture>
 {
+    /// <summary>Checks default anonymous paging and linked-level JSON with persisted Thai values.</summary>
+    /// <returns>A task that completes after checking default anonymous paging and linked-level JSON with persisted Thai values.</returns>
     [Fact]
     public async Task AnonymousRead_DefaultPageAndLevelProjection_PreserveLiteralJsonAndPersistedThai()
     {
@@ -53,6 +57,9 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(HttpStatusCode.OK, levels.StatusCode);
     }
 
+    /// <summary>Checks that anonymous reads of absent data return 404.</summary>
+    /// <param name="route">The offer or level collection/detail route requested after the fixture database is emptied.</param>
+    /// <returns>A task that completes after checking that anonymous reads of absent data return 404.</returns>
     [Theory]
     [InlineData("/Jobs")]
     [InlineData("/Jobs/2147483647")]
@@ -65,6 +72,12 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    /// <summary>Checks that normal authentication or permission failures leave no created rows.</summary>
+    /// <param name="route">The offer or level collection route receiving the attempted creation.</param>
+    /// <param name="permission">The create permission used to construct the synthetic client for the selected resource.</param>
+    /// <param name="authority">The authentication failure scenario: anonymous, expired, wrong-signature, or missing-permission.</param>
+    /// <param name="status">The expected HTTP rejection status, either 401 or 403.</param>
+    /// <returns>A task that completes after checking that normal authentication or permission failures leave no created rows.</returns>
     [Theory]
     [InlineData("Jobs", "legacy-career.jobs.create", "anonymous", 401)]
     [InlineData("Jobs", "legacy-career.jobs.create", "expired", 401)]
@@ -80,6 +93,8 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.False(await db.Offers.AnyAsync()); Assert.False(await db.Levels.AnyAsync());
     }
 
+    /// <summary>Checks authorized level creation, update, readback, and the named location route.</summary>
+    /// <returns>A task that completes after checking authorized level creation, update, readback, and the named location route.</returns>
     [Fact]
     public async Task LevelCreateUpdateAndRead_NormalRs256_PersistsSourceFieldsAndNamedLocation()
     {
@@ -101,6 +116,8 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
     }
 
+    /// <summary>Checks that offer creation writes only fields consumed by the original controller.</summary>
+    /// <returns>A task that completes after checking that offer creation writes only fields consumed by the original controller.</returns>
     [Fact]
     public async Task OfferCreate_SourceMutationWhitelist_DoesNotInventWritesToReadOnlyRichFields()
     {
@@ -119,6 +136,8 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.False(json.RootElement.TryGetProperty("location", out _));
     }
 
+    /// <summary>Checks that offer updates preserve imported rich fields and creation time.</summary>
+    /// <returns>A task that completes after checking that offer updates preserve imported rich fields and creation time.</returns>
     [Fact]
     public async Task OfferUpdate_SourceMutationWhitelist_PreservesImportedRichFieldsAndCreatedDate()
     {
@@ -147,6 +166,10 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal("Imported location", stored.Location);
     }
 
+    /// <summary>Checks that updates to missing records return 404 without creating rows.</summary>
+    /// <param name="route">The offer or level collection prefix used to construct a route to an absent identifier.</param>
+    /// <param name="permission">The update permission granted to the synthetic client so the missing-record behavior is exercised.</param>
+    /// <returns>A task that completes after checking that updates to missing records return 404 without creating rows.</returns>
     [Theory]
     [InlineData("Jobs", "legacy-career.jobs.update")]
     [InlineData("jobs/levels", "legacy-career.levels.update")]
@@ -170,6 +193,10 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Location = "Untrusted new location"
     };
 
+    /// <summary>Checks literal special characters and Thai text in anonymous search.</summary>
+    /// <param name="search">The literal search term, including SQL wildcard characters, a backslash, or Thai text, sent in the query string.</param>
+    /// <param name="title">The seeded offer title expected to match the literal search and appear in the returned JSON.</param>
+    /// <returns>A task that completes after checking literal special characters and Thai text in anonymous search.</returns>
     [Theory]
     [InlineData("%", "Literal%")]
     [InlineData("_", "Literal_")]
@@ -187,6 +214,10 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(title, Assert.Single(json.RootElement.GetProperty("items").EnumerateArray()).GetProperty("title").GetString());
     }
 
+    /// <summary>Checks paging under all four original offer sort orders.</summary>
+    /// <param name="sort">The original JobId or JobCreatedDate sort enum name sent in the anonymous listing query.</param>
+    /// <param name="descending">Whether the second one-item page should contain the first seeded offer because descending order reverses the rows.</param>
+    /// <returns>A task that completes after checking paging under all four original offer sort orders.</returns>
     [Theory]
     [InlineData("JobId_Ascending", false)]
     [InlineData("JobId_Descending", true)]
@@ -207,6 +238,10 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         using var beyond = await client.GetAsync($"/Jobs?sort={sort}&index=3&size=1"); Assert.Equal(HttpStatusCode.NotFound, beyond.StatusCode);
     }
 
+    /// <summary>Checks original nullable creation-date placement across page boundaries.</summary>
+    /// <param name="sort">The original ascending or descending creation-date sort enum name sent in the anonymous listing query.</param>
+    /// <param name="descending">Whether dated offers appear newest first and the undated offer appears last rather than first.</param>
+    /// <returns>A task that completes after checking original nullable creation-date placement across page boundaries.</returns>
     [Theory]
     [InlineData("JobCreatedDate_Ascending", false)]
     [InlineData("JobCreatedDate_Descending", true)]
@@ -258,6 +293,8 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(JsonSerializer.Serialize(beforeLevel), JsonSerializer.Serialize(await db.Levels.AsNoTracking().SingleAsync()));
     }
 
+    /// <summary>Checks that numeric search matches identifiers or source text fields.</summary>
+    /// <returns>A task that completes after checking that numeric search matches identifiers or source text fields.</returns>
     [Fact]
     public async Task NumericSearch_PreservesSourceIdOrTextRatherThanExclusiveIdRule()
     {
@@ -269,6 +306,9 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(2, json.RootElement.GetProperty("totalItems").GetInt32());
     }
 
+    /// <summary>Checks literal characters and significant spaces across all original searchable fields.</summary>
+    /// <param name="field">The original searchable offer field populated with literal characters and significant spaces: title, introduction, whatWeOffer, location, or description.</param>
+    /// <returns>A task that completes after checking literal characters and significant spaces across all original searchable fields.</returns>
     [Theory]
     [InlineData("title")]
     [InlineData("introduction")]
@@ -300,6 +340,9 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         }
     }
 
+    /// <summary>Checks that search does not expand into prerequisites or linked-level fields.</summary>
+    /// <param name="field">The excluded search location seeded with the only marker: prerequisites or the linked level name.</param>
+    /// <returns>A task that completes after checking that search does not expand into prerequisites or linked-level fields.</returns>
     [Theory]
     [InlineData("prerequisites")]
     [InlineData("level")]
@@ -319,6 +362,412 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.Equal(1, await db.Levels.CountAsync());
     }
 
+    /// <summary>Checks that changing an offer's level refreshes its public projection without changing sibling rows.</summary>
+    /// <returns>A task that completes after checking that changing an offer's level refreshes its public projection without changing sibling rows.</returns>
+    [Fact]
+    public async Task Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor()
+    {
+        await fixture.ResetAsync();
+        JobLevel oldLevel;
+        JobLevel nextLevel;
+        JobOffer selected;
+        JobOffer survivor;
+        await using (var db = fixture.Context())
+        {
+            oldLevel = Level("  ระดับเดิม  ");
+            nextLevel = Level("  ระดับใหม่  ");
+            db.Levels.AddRange(oldLevel, nextLevel);
+            await db.SaveChangesAsync();
+            selected = Offer("Selected", oldLevel.Id);
+            survivor = Offer("Survivor", oldLevel.Id);
+            db.Offers.AddRange(selected, survivor);
+            await db.SaveChangesAsync();
+        }
+        Assert.NotEqual(oldLevel.Id, nextLevel.Id);
+        var beforeLevels = await LevelStateAsync();
+        var beforeSurvivor = await OfferStateAsync(survivor.Id);
+        uint beforeVersion;
+        await using (var db = fixture.Context())
+        {
+            beforeVersion = await db.Offers.AsNoTracking().Where(offer => offer.Id == selected.Id)
+                .Select(offer => EF.Property<uint>(offer, "Version")).SingleAsync();
+        }
+        using var anonymous = fixture.Client();
+        using (var before = await anonymous.GetAsync($"/Jobs/{selected.Id}"))
+        {
+            Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+            using var json = JsonDocument.Parse(await before.Content.ReadAsStringAsync());
+            Assert.Equal(oldLevel.Id, json.RootElement.GetProperty("levelId").GetInt32());
+            Assert.Equal(oldLevel.Id, json.RootElement.GetProperty("level").GetProperty("id").GetInt32());
+        }
+        using var writer = fixture.Client("legacy-career.jobs.update");
+        using (var updated = await writer.PutAsJsonAsync($"/Jobs/{selected.Id}", new
+        {
+            LevelId = nextLevel.Id,
+            Title = "  วิศวกรปรับระดับ  ",
+            Description = "Updated description",
+            Prerequisites = "Updated prerequisites",
+            IsFilled = false,
+            Id = survivor.Id,
+            CreatedDate = new DateTime(1980, 1, 1),
+            Introduction = "Forged introduction",
+            WhatWeOffer = "Forged benefits",
+            Location = "Forged location",
+            Level = new { Id = oldLevel.Id, Name = "Forged principal", Description = "Forged description" }
+        }))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
+            Assert.Equal(string.Empty, await updated.Content.ReadAsStringAsync());
+        }
+        await using (var db = fixture.Context())
+        {
+            var actual = await db.Offers.AsNoTracking().SingleAsync(offer => offer.Id == selected.Id);
+            Assert.Equal(nextLevel.Id, actual.LevelId);
+            Assert.Equal("  วิศวกรปรับระดับ  ", actual.Title);
+            Assert.Equal("Updated description", actual.Description);
+            Assert.Equal("Updated prerequisites", actual.Prerequisites);
+            Assert.False(actual.IsFilled);
+            Assert.Equal(selected.CreatedDate, actual.CreatedDate);
+            Assert.True(actual.ModifiedDate > selected.ModifiedDate);
+            Assert.Equal(selected.Introduction, actual.Introduction);
+            Assert.Equal(selected.WhatWeOffer, actual.WhatWeOffer);
+            Assert.Equal(selected.Location, actual.Location);
+            var version = await db.Offers.AsNoTracking().Where(offer => offer.Id == selected.Id)
+                .Select(offer => EF.Property<uint>(offer, "Version")).SingleAsync();
+            Assert.NotEqual(beforeVersion, version);
+            Assert.Equal(2, await db.Offers.CountAsync());
+            Assert.Equal(2, await db.Levels.CountAsync());
+        }
+        Assert.Equal(beforeLevels, await LevelStateAsync());
+        Assert.Equal(beforeSurvivor, await OfferStateAsync(survivor.Id));
+        var committed = await OfferStateAsync(selected.Id);
+        foreach (var route in new[] { $"/Jobs/{selected.Id}", $"/jobs/{selected.Id}/" })
+        {
+            using var response = await anonymous.GetAsync(route);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            AssertSelected(json.RootElement, selected.Id, nextLevel);
+        }
+        using (var response = await anonymous.GetAsync("/jobs/"))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(2, json.RootElement.GetProperty("totalItems").GetInt32());
+            var items = json.RootElement.GetProperty("items").EnumerateArray().ToArray();
+            Assert.Equal(new[] { selected.Id, survivor.Id }.OrderBy(id => id).ToArray(),
+                items.Select(item => item.GetProperty("id").GetInt32()).ToArray());
+            AssertSelected(Assert.Single(items, item => item.GetProperty("id").GetInt32() == selected.Id), selected.Id, nextLevel);
+            var surviving = Assert.Single(items, item => item.GetProperty("id").GetInt32() == survivor.Id);
+            Assert.Equal(oldLevel.Id, surviving.GetProperty("levelId").GetInt32());
+            Assert.Equal(oldLevel.Name, surviving.GetProperty("level").GetProperty("name").GetString());
+        }
+        Assert.Equal("true", await anonymous.GetStringAsync("/jobs/job-opening-status/"));
+        Assert.Equal(committed, await OfferStateAsync(selected.Id));
+        Assert.Equal(beforeSurvivor, await OfferStateAsync(survivor.Id));
+        Assert.Equal(beforeLevels, await LevelStateAsync());
+    }
+
+    private static JobLevel Level(string name) => new()
+    {
+        Name = name,
+        Description = "Persisted principal",
+        CreatedDate = new DateTime(2020, 1, 1),
+        ModifiedDate = new DateTime(2020, 1, 2)
+    };
+
+    private static JobOffer Offer(string title, int levelId) => new()
+    {
+        LevelId = levelId,
+        Title = title,
+        Description = "Original description",
+        Prerequisites = "Original prerequisites",
+        Introduction = "Imported introduction",
+        WhatWeOffer = "Imported benefits",
+        Location = "Imported location",
+        IsFilled = true,
+        CreatedDate = new DateTime(2020, 1, 1),
+        ModifiedDate = new DateTime(2020, 1, 2)
+    };
+
+    private static void AssertSelected(JsonElement item, int id, JobLevel level)
+    {
+        Assert.Equal(id, item.GetProperty("id").GetInt32());
+        Assert.Equal(level.Id, item.GetProperty("levelId").GetInt32());
+        Assert.Equal("  วิศวกรปรับระดับ  ", item.GetProperty("title").GetString());
+        Assert.Equal(level.Id, item.GetProperty("level").GetProperty("id").GetInt32());
+        Assert.Equal(level.Name, item.GetProperty("level").GetProperty("name").GetString());
+        Assert.False(item.GetProperty("level").TryGetProperty("offers", out _));
+    }
+
+    private async Task<string> OfferStateAsync(int id)
+    {
+        await using var db = fixture.Context();
+        return JsonSerializer.Serialize(await db.Offers.AsNoTracking().Where(offer => offer.Id == id)
+            .Select(offer => new { Row = offer, Version = EF.Property<uint>(offer, "Version") }).SingleAsync());
+    }
+
+    private async Task<string> LevelStateAsync()
+    {
+        await using var db = fixture.Context();
+        return JsonSerializer.Serialize(await db.Levels.AsNoTracking().OrderBy(level => level.Id)
+            .Select(level => new { Row = level, Version = EF.Property<uint>(level, "Version") }).ToArrayAsync());
+    }
+
+    /// <summary>Checks null offer updates before lookup and preserves the physical graph.</summary>
+    /// <param name="missing">Whether the null-body update targets an absent identifier rather than the persisted selected offer.</param>
+    /// <returns>A task that completes after checking null offer updates before lookup and preserves the physical graph.</returns>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NullUpdateBody_IsBadRequestBeforeExistingOrMissingLookupAndPreservesPhysicalGraph(bool missing)
+    {
+        await fixture.ResetAsync();
+        int id;
+        await using (var db = fixture.Context())
+        {
+            var selected = new JobOffer
+            {
+                Level = new JobLevel { Name = "  ระดับเดิม  ", Description = "Persisted principal" },
+                Title = "  วิศวกร  ",
+                Description = "Persisted description",
+                Prerequisites = "Persisted prerequisites",
+                Introduction = "Imported introduction",
+                WhatWeOffer = "Imported benefits",
+                Location = "Imported location",
+                IsFilled = false,
+                CreatedDate = new DateTime(2020, 1, 1),
+                ModifiedDate = new DateTime(2020, 1, 2)
+            };
+            var survivor = new JobOffer
+            {
+                Level = new JobLevel { Name = "Survivor level", Description = "Unrelated principal" },
+                Title = "Survivor",
+                IsFilled = true
+            };
+            db.Offers.AddRange(selected, survivor);
+            await db.SaveChangesAsync();
+            id = missing ? int.MaxValue : selected.Id;
+            Assert.NotEqual(int.MaxValue, selected.Id);
+            Assert.NotEqual(selected.Id, survivor.Id);
+            Assert.NotEqual(selected.LevelId, survivor.LevelId);
+            Assert.Equal(2, await db.Offers.CountAsync());
+            Assert.Equal(2, await db.Levels.CountAsync());
+        }
+        var before = await PhysicalStateAsync();
+        using var writer = fixture.Client("legacy-career.jobs.update");
+        foreach (var route in new[] { $"/Jobs/{id}", $"/jobs/{id}/" })
+        {
+            using var response = await writer.PutAsync(route, new StringContent("null", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(before, await PhysicalStateAsync());
+        }
+        using var anonymous = fixture.Client();
+        Assert.Equal("true", await anonymous.GetStringAsync("/jobs/job-opening-status/"));
+        Assert.Equal(before, await PhysicalStateAsync());
+    }
+
+    private async Task<string> PhysicalStateAsync()
+    {
+        await using var db = fixture.Context();
+        var offers = await db.Offers.AsNoTracking().OrderBy(offer => offer.Id)
+            .Select(offer => new { Row = offer, Version = EF.Property<uint>(offer, "Version") }).ToArrayAsync();
+        var levels = await db.Levels.AsNoTracking().OrderBy(level => level.Id)
+            .Select(level => new { Row = level, Version = EF.Property<uint>(level, "Version") }).ToArrayAsync();
+        return JsonSerializer.Serialize(new { Offers = offers, Levels = levels });
+    }
+
+    /// <summary>Checks null level updates and preserves the physical offer-level graph.</summary>
+    /// <param name="missing">Whether the null-body update targets an absent identifier rather than the persisted selected level.</param>
+    /// <returns>A task that completes after checking null level updates and preserves the physical offer-level graph.</returns>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LevelNullUpdateBody_PreservesAutomaticValidationAndPhysicalOfferLevelGraph(bool missing)
+    {
+        await fixture.ResetAsync();
+        int levelId;
+        await using (var db = fixture.Context())
+        {
+            var selected = new JobLevel { Name = "Synthetic selected", Description = "Retained selected" };
+            var survivor = new JobLevel { Name = "Synthetic survivor", Description = "Retained survivor" };
+            db.Levels.AddRange(selected, survivor);
+            db.Offers.Add(new JobOffer { Level = selected, Title = "Synthetic linked offer", IsFilled = false });
+            await db.SaveChangesAsync();
+            levelId = missing ? int.MaxValue : selected.Id;
+            Assert.NotEqual(int.MaxValue, selected.Id);
+        }
+
+        var before = await PhysicalStateAsync();
+        using var writer = fixture.Client("legacy-career.levels.update");
+        foreach (var route in new[] { $"/jobs/Levels/{levelId}", $"/jobs/levels/{levelId}/" })
+        {
+            using var response = await writer.PutAsync(route, new StringContent("null", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(400, json.RootElement.GetProperty("status").GetInt32());
+            Assert.Equal(JsonValueKind.Object, json.RootElement.GetProperty("errors").ValueKind);
+            Assert.Equal(before, await PhysicalStateAsync());
+        }
+    }
+
+    /// <summary>Checks complete date ordering across the retained thousand-and-one-row source corpus.</summary>
+    /// <param name="sort">The original ascending or descending creation-date sort enum name used for both public listing route forms.</param>
+    /// <param name="descending">Whether to reverse the complete expected year sequence from 2000 through 3000.</param>
+    /// <param name="firstYear">The expected year of the first offer in the complete sorted response.</param>
+    /// <param name="lastYear">The expected year of the last offer in the complete sorted response.</param>
+    /// <returns>A task that completes after checking complete date ordering across the retained thousand-and-one-row source corpus.</returns>
+    [Theory]
+    [InlineData("JobCreatedDate_Ascending", false, 2000, 3000)]
+    [InlineData("JobCreatedDate_Descending", true, 3000, 2000)]
+    public async Task OriginalThousandAndOneDateCorpus_PreservesCompleteYearOrderAndPhysicalGraph(
+        string sort, bool descending, int firstYear, int lastYear)
+    {
+        using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        var cancellation = lifetime.Token;
+        await fixture.ResetAsync();
+        await using (var db = fixture.Context())
+        {
+            db.Offers.AddRange(Enumerable.Range(0, 1001).Select(index => new JobOffer
+            {
+                CreatedDate = new DateTime(2000 + index, 1, 1),
+                Level = new JobLevel
+                {
+                    Name = "test name",
+                    Description = "test description",
+                },
+            }));
+            await db.SaveChangesAsync(cancellation);
+            Assert.Equal(1001, await db.Offers.CountAsync(cancellation));
+            Assert.Equal(1001, await db.Levels.CountAsync(cancellation));
+        }
+
+        var before = await OriginalSortCorpusPhysicalSnapshotAsync(cancellation);
+        var expectedYears = Enumerable.Range(2000, 1001).ToArray();
+        if (descending)
+        {
+            Array.Reverse(expectedYears);
+        }
+
+        using var client = fixture.Client();
+        Assert.Null(client.DefaultRequestHeaders.Authorization);
+        foreach (var route in new[] { "/Jobs", "/jobs/" })
+        {
+            using var response = await client.GetAsync($"{route}?sort={sort}", cancellation);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
+            var page = json.RootElement;
+            Assert.Equal(1001, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
+            Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
+            Assert.False(page.GetProperty("hasPreviousPage").GetBoolean());
+            Assert.False(page.GetProperty("hasNextPage").GetBoolean());
+            var items = page.GetProperty("items").EnumerateArray().ToArray();
+            Assert.Equal(1001, items.Length);
+            Assert.Equal(1001, items.Select(item => item.GetProperty("id").GetInt32()).Distinct().Count());
+            var years = items.Select(item => item.GetProperty("createdDate").GetDateTime().Year).ToArray();
+            Assert.Equal(firstYear, years[0]);
+            Assert.Equal(lastYear, years[^1]);
+            Assert.Equal(expectedYears, years);
+        }
+
+        Assert.Equal(before, await OriginalSortCorpusPhysicalSnapshotAsync(cancellation));
+    }
+
+    /// <summary>Checks complete identifier ordering across the retained thousand-row source corpus.</summary>
+    /// <param name="sort">The original ascending or descending offer-identifier sort enum name used for both public listing route forms.</param>
+    /// <param name="descending">Whether to reverse the complete expected identifier sequence from 1 through 1000.</param>
+    /// <param name="firstId">The expected offer identifier at the start of the complete sorted response.</param>
+    /// <param name="lastId">The expected offer identifier at the end of the complete sorted response.</param>
+    /// <returns>A task that completes after checking complete identifier ordering across the retained thousand-row source corpus.</returns>
+    [Theory]
+    [InlineData("JobId_Ascending", false, 1, 1000)]
+    [InlineData("JobId_Descending", true, 1000, 1)]
+    public async Task OriginalThousandExplicitIdCorpus_PreservesCompleteIdOrderAndPhysicalGraph(
+        string sort, bool descending, int firstId, int lastId)
+    {
+        using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        var cancellation = lifetime.Token;
+        await fixture.ResetAsync();
+        await using (var db = fixture.Context())
+        {
+            db.Offers.AddRange(Enumerable.Range(1, 1000).Select(id => new JobOffer
+            {
+                Id = id,
+                Level = new JobLevel
+                {
+                    Name = "test name",
+                    Description = "test description",
+                },
+            }));
+            await db.SaveChangesAsync(cancellation);
+            Assert.Equal(1000, await db.Offers.CountAsync(cancellation));
+            Assert.Equal(1000, await db.Levels.CountAsync(cancellation));
+        }
+
+        var before = await OriginalSortCorpusPhysicalSnapshotAsync(cancellation);
+        var expectedIds = Enumerable.Range(1, 1000).ToArray();
+        if (descending)
+        {
+            Array.Reverse(expectedIds);
+        }
+
+        using var client = fixture.Client();
+        Assert.Null(client.DefaultRequestHeaders.Authorization);
+        foreach (var route in new[] { "/Jobs", "/jobs/" })
+        {
+            using var response = await client.GetAsync($"{route}?sort={sort}", cancellation);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
+            var page = json.RootElement;
+            Assert.Equal(1000, page.GetProperty("totalItems").GetInt32());
+            Assert.Equal(1, page.GetProperty("pageIndex").GetInt32());
+            Assert.Equal(1, page.GetProperty("totalPages").GetInt32());
+            Assert.False(page.GetProperty("hasPreviousPage").GetBoolean());
+            Assert.False(page.GetProperty("hasNextPage").GetBoolean());
+            var ids = page.GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetInt32()).ToArray();
+            Assert.Equal(1000, ids.Length);
+            Assert.Equal(firstId, ids[0]);
+            Assert.Equal(lastId, ids[^1]);
+            Assert.Equal(expectedIds, ids);
+        }
+
+        Assert.Equal(before, await OriginalSortCorpusPhysicalSnapshotAsync(cancellation));
+    }
+
+    private async Task<string> OriginalSortCorpusPhysicalSnapshotAsync(CancellationToken cancellation)
+    {
+        await using var db = fixture.Context();
+        return JsonSerializer.Serialize(new
+        {
+            Offers = await db.Offers.AsNoTracking().OrderBy(row => row.Id).Select(row => new
+            {
+                row.Id,
+                row.LevelId,
+                row.Title,
+                row.Introduction,
+                row.Description,
+                row.Prerequisites,
+                row.WhatWeOffer,
+                row.Location,
+                row.IsFilled,
+                row.CreatedDate,
+                row.ModifiedDate,
+                Version = EF.Property<uint>(row, "Version"),
+            }).ToArrayAsync(cancellation),
+            Levels = await db.Levels.AsNoTracking().OrderBy(row => row.Id).Select(row => new
+            {
+                row.Id,
+                row.Name,
+                row.Description,
+                row.CreatedDate,
+                row.ModifiedDate,
+                Version = EF.Property<uint>(row, "Version"),
+            }).ToArrayAsync(cancellation),
+        });
+    }
+
     private static void SetSearchField(JobOffer offer, string field, string value)
     {
         switch (field)
@@ -332,6 +781,10 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         }
     }
 
+    /// <summary>Checks that null creation bodies return 400 without persistence.</summary>
+    /// <param name="route">The offer or level collection route receiving a JSON null creation body.</param>
+    /// <param name="permission">The matching create permission granted to the client so body validation is exercised.</param>
+    /// <returns>A task that completes after checking that null creation bodies return 400 without persistence.</returns>
     [Theory]
     [InlineData("Jobs", "legacy-career.jobs.create")]
     [InlineData("jobs/levels", "legacy-career.levels.create")]
@@ -343,6 +796,8 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
         Assert.False(await db.Offers.AnyAsync()); Assert.False(await db.Levels.AnyAsync());
     }
 
+    /// <summary>Checks that invalid offer foreign keys persist no row and disclose no provider details.</summary>
+    /// <returns>A task that completes after checking that invalid offer foreign keys persist no row and disclose no provider details.</returns>
     [Fact]
     public async Task InvalidOfferForeignKey_ActualPostgresFailureDoesNotPersistRootOrExposeProvider()
     {
@@ -354,38 +809,104 @@ public sealed class CareerRouteHttpTests(CareerRouteFixture fixture) : IClassFix
     }
 }
 
+/// <summary>Owns disposable Career dependencies and signed clients for route acceptance.</summary>
 public sealed class CareerRouteFixture : IAsyncLifetime
 {
     private const string Issuer = "https://career-component.example.invalid";
     private const string Audience = "career-component";
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7.4-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
-    private readonly RSA key = RSA.Create(2048);
-    private readonly RSA wrongKey = RSA.Create(2048);
+    private readonly CareerFixtureLifetime lifetime = new("route");
+    private readonly PostgreSqlContainer postgres;
+    private readonly IContainer redis;
+    private readonly RSA key;
+    private readonly RSA wrongKey;
+    private readonly Func<CancellationToken, Task>? afterProvidersStarted;
+    internal PostgreSqlContainer PostgresResource => postgres;
+    internal IContainer RedisResource => redis;
+
+    /// <summary>Retains fixture resources from construction through terminal cleanup.</summary>
+    public CareerRouteFixture() : this(null) { }
+
+    internal CareerRouteFixture(Func<CancellationToken, Task>? afterProvidersStarted)
+    {
+        this.afterProvidersStarted = afterProvidersStarted;
+        try
+        {
+            key = lifetime.Create("key", 3, () => RSA.Create(2048), value => { value.Dispose(); return ValueTask.CompletedTask; });
+            wrongKey = lifetime.Create("wrong-key", 3, () => RSA.Create(2048), value => { value.Dispose(); return ValueTask.CompletedTask; });
+            postgres = lifetime.Create("postgres", 4,
+                () => new PostgreSqlBuilder("postgres:18-alpine").WithLabel("com.maliev.career.fixture", lifetime.FixtureId)
+                    .WithCreateParameterModifier(parameters => CareerFixtureContainerLimits.Postgres(parameters, lifetime.FixtureId)).Build(),
+                value => CareerFixtureContainerLimits.ReleaseAsync(value, lifetime.FixtureId), value => CareerFixtureLifetime.ObserveContainer(value, "postgres:18-alpine"));
+            redis = lifetime.Create("redis", 4,
+                () => new ContainerBuilder("redis:7.4-alpine").WithPortBinding(6379, true)
+                    .WithLabel("com.maliev.career.fixture", lifetime.FixtureId)
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                    .WithCreateParameterModifier(parameters => CareerFixtureContainerLimits.Redis(parameters, lifetime.FixtureId)).Build(),
+                value => CareerFixtureContainerLimits.ReleaseAsync(value, lifetime.FixtureId), value => CareerFixtureLifetime.ObserveContainer(value, "redis:7.4-alpine"));
+        }
+        catch (Exception primary)
+        {
+            lifetime.DisposePreservingAsync(primary).GetAwaiter().GetResult();
+            throw;
+        }
+    }
+    /// <summary>Gets the fixture's default application factory.</summary>
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
 
+    /// <summary>Starts disposable dependencies, migrates the database, and creates the host.</summary>
+    /// <returns>A task that completes after PostgreSQL and Redis start, migrations run, and the default application factory is created.</returns>
     public async Task InitializeAsync()
     {
-        await postgres.StartAsync(); await redis.StartAsync();
-        await using var db = Context(); await db.Database.MigrateAsync();
-        Factory = new CareerFactory(this);
+        try
+        {
+            await lifetime.RunAsync("initialize", async cancellation =>
+            {
+                await lifetime.RunAsync("postgres-start", token => { CareerFixtureContainerLimits.RequireFreshAdmission(); return postgres.StartAsync(token); }, TimeSpan.FromSeconds(120), cancellation);
+                lifetime.ObserveOwned(postgres);
+                await lifetime.RunAsync("redis-start", token => { CareerFixtureContainerLimits.RequireFreshAdmission(); return redis.StartAsync(token); }, TimeSpan.FromSeconds(120), cancellation);
+                lifetime.ObserveOwned(redis);
+                if (afterProvidersStarted is not null) await afterProvidersStarted(cancellation);
+                await lifetime.UseOwnedAsync(Context, (db, token) => db.Database.MigrateAsync(token), cancellation);
+                Factory = lifetime.Create("factory", 2, () => new CareerFactory(this), value => value.DisposeAsync());
+            }, TimeSpan.FromMinutes(4));
+        }
+        catch (Exception primary)
+        {
+            await lifetime.DisposePreservingAsync(primary);
+            throw;
+        }
     }
-
-    public CareerDbContext Context() => new(new DbContextOptionsBuilder<CareerDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
-    public async Task ResetAsync()
+    /// <summary>Creates a context connected to the fixture-owned PostgreSQL database.</summary>
+    /// <returns>A new caller-owned Career database context connected to the fixture PostgreSQL container.</returns>
+    public CareerDbContext Context() => lifetime.Create("context", 1,
+        () => new CareerDbContext(new DbContextOptionsBuilder<CareerDbContext>().UseNpgsql(postgres.GetConnectionString()).Options),
+        value => value.DisposeAsync());
+    /// <summary>Clears test offers and levels before the next route scenario.</summary>
+    /// <returns>A task that completes after all fixture offers and levels are deleted.</returns>
+    public Task ResetAsync() => lifetime.RunAsync("reset", async cancellation =>
     {
-        await using var db = Context();
-        await db.Offers.ExecuteDeleteAsync(); await db.Levels.ExecuteDeleteAsync();
-    }
-    public async Task<int> SeedLevelAsync()
+        await lifetime.UseOwnedAsync(Context, async (db, token) =>
+        {
+            await db.Offers.ExecuteDeleteAsync(token);
+            await db.Levels.ExecuteDeleteAsync(token);
+        }, cancellation);
+    }, TimeSpan.FromSeconds(90), serialize: true);
+    /// <summary>Creates a synthetic level and returns its generated identifier.</summary>
+    /// <returns>A task whose result is the generated identifier of the newly persisted synthetic job level.</returns>
+    public Task<int> SeedLevelAsync() => lifetime.UseOwnedAsync(Context, async (db, token) =>
     {
-        await using var db = Context(); var level = new JobLevel { Name = "Fixture level", Description = "Fixture description" };
-        db.Levels.Add(level); await db.SaveChangesAsync(); return level.Id;
-    }
+        var level = new JobLevel { Name = "Fixture level", Description = "Fixture description" };
+        db.Levels.Add(level); await db.SaveChangesAsync(token); return level.Id;
+    });
+    /// <summary>Creates an anonymous or controlled signed client with the requested authority.</summary>
+    /// <param name="permission">The permission claim to include in the synthetic token; null creates an anonymous client.</param>
+    /// <param name="authority">The token scenario: valid, anonymous, expired, wrong-signature, or missing-permission.</param>
+    /// <returns>A caller-owned HTTP client with redirects disabled and the requested anonymous or synthetic bearer authentication.</returns>
     public HttpClient Client(string? permission = null, string authority = "valid")
     {
-        var client = Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var client = lifetime.Create("client", 0,
+            () => Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false }),
+            value => { value.Dispose(); return ValueTask.CompletedTask; });
         if (permission is null || authority == "anonymous") return client;
         var claims = new List<Claim> { new(JwtRegisteredClaimNames.Sub, "service:career-fixture-" + Guid.NewGuid().ToString("N")) };
         if (authority != "missing-permission") claims.Add(new("permissions", permission));
@@ -396,11 +917,9 @@ public sealed class CareerRouteFixture : IAsyncLifetime
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
         return client;
     }
-    public async Task DisposeAsync()
-    {
-        if (Factory is not null) await Factory.DisposeAsync();
-        key.Dispose(); wrongKey.Dispose(); await redis.DisposeAsync(); await postgres.DisposeAsync();
-    }
+    /// <summary>Disposes the fixture host, signing key, and disposable dependencies.</summary>
+    /// <returns>A task that completes after the host, both signing keys, Redis container, and PostgreSQL container are disposed.</returns>
+    public Task DisposeAsync() => lifetime.DisposeAsync();
     private sealed class CareerFactory(CareerRouteFixture fixture) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Production");

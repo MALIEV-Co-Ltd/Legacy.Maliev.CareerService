@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Legacy.Maliev.CareerService.Api.Logging;
 using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Application.Services;
 using Legacy.Maliev.CareerService.Data;
@@ -25,6 +26,7 @@ static async Task RunHostAsync(string[] startupArgs)
     var builder = WebApplication.CreateBuilder(startupArgs);
 
     builder.AddServiceDefaults();
+    builder.Logging.AddCareerPrivateDiagnostics();
     builder.AddDefaultApiVersioning();
     builder.AddPostgresDbContext<CareerDbContext>(connectionName: "CareerDbContext", configureOptions: (_, options) =>
         // EF's query-failure message embeds exception text/stacks before the formatter can redact it.
@@ -35,6 +37,7 @@ static async Task RunHostAsync(string[] startupArgs)
     builder.AddStandardCors();
     builder.AddJwtAuthentication();
     builder.AddStandardMiddleware(options => options.EnableRequestLogging = true);
+    builder.AddPrivateRequestObservation("Jobs");
     builder.AddStandardOpenApi(
         title: "Legacy MALIEV JobOffer Service API",
         description: "Temporary .NET 10 compatibility service preserving the legacy Jobs and jobs/Levels API contracts.");
@@ -43,6 +46,12 @@ static async Task RunHostAsync(string[] startupArgs)
 
     builder.Services.AddControllers().AddJsonOptions(options =>
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(
+        Legacy.Maliev.CareerService.Api.Serialization.CareerLevelJsonOptions.Configure);
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(
+        Legacy.Maliev.CareerService.Api.Serialization.CareerOfferJsonOptions.Configure);
+    builder.Services.AddSingleton<Microsoft.Extensions.Options.IConfigureOptions<Microsoft.AspNetCore.Mvc.MvcOptions>,
+        Legacy.Maliev.CareerService.Api.Serialization.CareerOriginalBodyMvcOptionsSetup>();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddScoped<ICareerRepository, CareerRepository>();
     builder.Services.AddScoped<ICareerService, CareerApplicationService>();

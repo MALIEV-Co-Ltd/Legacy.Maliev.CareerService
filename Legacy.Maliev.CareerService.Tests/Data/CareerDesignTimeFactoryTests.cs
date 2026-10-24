@@ -5,15 +5,19 @@ using Npgsql;
 
 namespace Legacy.Maliev.CareerService.Tests.Data;
 
+/// <summary>Serializes tests that change design-time environment settings.</summary>
 [CollectionDefinition("Career design-time environment", DisableParallelization = true)]
 public sealed class CareerDesignTimeEnvironmentCollection;
 
+/// <summary>Checks that design-time contexts require the explicit Career connection setting.</summary>
 [Collection("Career design-time environment")]
 public sealed class CareerDesignTimeFactoryTests
 {
     private const string ConnectionKey = "ConnectionStrings__CareerDbContext";
     private const string SyntheticConnection = "Host=127.0.0.1;Port=1;Database=career_factory_fixture;Username=fixture";
 
+    /// <summary>Checks that missing or blank explicit connection values refuse context creation.</summary>
+    /// <param name="value">The null, empty, or whitespace value assigned to ConnectionStrings__CareerDbContext to verify that design-time creation refuses a missing explicit connection.</param>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -28,6 +32,7 @@ public sealed class CareerDesignTimeFactoryTests
         Assert.DoesNotContain("127.0.0.1", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Checks explicit Npgsql selection without opening a connection.</summary>
     [Fact]
     public void ExplicitConnection_SelectsNpgsqlWithoutOpeningAnyConnection()
     {
@@ -46,6 +51,7 @@ public sealed class CareerDesignTimeFactoryTests
         Assert.Equal(ConnectionState.Closed, connection.State);
     }
 
+    /// <summary>Checks that each context creation reads the current explicit setting.</summary>
     [Fact]
     public void FactoryReadsExplicitValueForEachCreation_AndDoesNotReuseEarlierConnection()
     {
@@ -61,6 +67,7 @@ public sealed class CareerDesignTimeFactoryTests
         Assert.Equal(ConnectionState.Closed, second.Database.GetDbConnection().State);
     }
 
+    /// <summary>Checks that other connection variables and arguments cannot replace the required setting.</summary>
     [Fact]
     public void OtherConnectionVariablesAndArguments_CannotReplaceTheRequiredExplicitValue()
     {
@@ -71,6 +78,7 @@ public sealed class CareerDesignTimeFactoryTests
             ["--connection", SyntheticConnection, "--ConnectionStrings:CareerDbContext=" + SyntheticConnection]));
     }
 
+    /// <summary>Checks that the original Jobs setting cannot substitute for the Career factory setting.</summary>
     [Fact]
     public void SourceJobsConnectionVariable_CannotSubstituteForTheExplicitCareerFactorySetting()
     {

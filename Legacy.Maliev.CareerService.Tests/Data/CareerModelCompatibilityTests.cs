@@ -5,8 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Legacy.Maliev.CareerService.Tests.Data;
 
+/// <summary>Checks original table mapping and timestamp migration semantics.</summary>
 public sealed class CareerModelCompatibilityTests
 {
+    /// <summary>Checks the legacy Level and Offer table mappings.</summary>
     [Fact]
     public void Model_maps_to_legacy_Level_and_Offer_tables()
     {
@@ -25,6 +27,7 @@ public sealed class CareerModelCompatibilityTests
         Assert.Equal(100, offer?.FindProperty(nameof(JobOffer.Title))?.GetMaxLength());
     }
 
+    /// <summary>Checks UTC wall-clock timestamp mappings for every date column.</summary>
     [Fact]
     public void Model_UsesUtcWallClockTimestampContractForAllDateColumns()
     {
@@ -45,6 +48,7 @@ public sealed class CareerModelCompatibilityTests
         }
     }
 
+    /// <summary>Checks that timestamp migration converts existing values explicitly as UTC.</summary>
     [Fact]
     public void TimestampMigration_ConvertsExistingValuesExplicitlyAsUtc()
     {

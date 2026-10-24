@@ -54,52 +54,74 @@ class RequiredCIControls(unittest.TestCase):
     def test_existing_job_timeout_preflight_before_sdk_and_always_evidence(self):
         text=(ROOT/'.github/workflows/_build-and-test.yml').read_text(encoding='utf-8')
         self.assertIn('timeout-minutes: 30',text)
-        self.assertLess(text.index('Check fresh physical memory before SDK setup'),text.index('name: Validate .NET solution'))
+        self.assertLess(text.index('Check fresh physical memory before SDK setup'),text.index('name: Set up .NET for build-first focused regression'))
         self.assertIn('python3 -B scripts/career_required_ci_preflight.py',text)
         self.assertIn('set -euo pipefail',text)
         self.assertIn('if: always()',text)
         self.assertIn('${{ runner.temp }}/career-sdk-memory-preflight.json',text)
-        self.assertIn('GOTOOLCHAIN: go1.26.8',text)
+        self.assertNotIn('GOTOOLCHAIN:',text)  # Preserve current main: scanner/toolchain remain owned by its exact pinned action.
         self.assertIn('dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8',text)
 
     def test_fixture_explicit_memory_swap_cpu_pid_loopback_and_finite_provider_commands(self):
-        text=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteHttpTests.cs').read_text(encoding='utf-8')
+        text=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerFixtureContainerLimits.cs').read_text(encoding='utf-8')
         for exact in ('Memory = 1024L * 1024 * 1024','MemorySwap = 1024L * 1024 * 1024',
                       'Memory = 256L * 1024 * 1024','MemorySwap = 256L * 1024 * 1024',
                       'NanoCPUs = 750000000','NanoCPUs = 500000000','PidsLimit = 128','PidsLimit = 64',
-                      'binding.HostIP = "127.0.0.1"','WithLabel("maliev.test.fixture", fixtureId)',
+                      'binding.HostIP = "127.0.0.1"','parameters.Labels["maliev.test.fixture"] = fixtureId',
                       'exec timeout 1200 docker-entrypoint.sh postgres','exec timeout 1200 redis-server',
-                      'TimeSpan.FromSeconds(120)','/var/lib/postgresql','/data'):
+                      'physicalKiB < 4194304','/var/lib/postgresql','/data'):
             self.assertIn(exact,text)
         self.assertNotIn('WithDockerEndpoint',text)
+        for name in ('CareerRouteHttpTests.cs','CareerLifecycleFixture.cs'):
+            fixture=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers'/name).read_text(encoding='utf-8')
+            self.assertIn('CareerFixtureContainerLimits.Postgres(parameters, lifetime.FixtureId)',fixture)
+            self.assertIn('CareerFixtureContainerLimits.Redis(parameters, lifetime.FixtureId)',fixture)
+            self.assertEqual(fixture.count('CareerFixtureContainerLimits.RequireFreshAdmission();'),2)
+            self.assertEqual(fixture.count('TimeSpan.FromSeconds(120), cancellation)'),2)
+            self.assertNotIn('WithDockerEndpoint',fixture)
+
 
     def test_lifecycle_finally_cleanup_reverse_pair_timeout_and_primary_error_retention(self):
-        text=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteFixtureLifetime.cs').read_text(encoding='utf-8')
-        self.assertIn('CancellationTokenSource(startupTimeout)',text)
-        self.assertIn('TimeSpan.FromSeconds(30)',text)
-        self.assertEqual(text.count('.WaitAsync(startup.Token)'),3)
+        text=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerFixtureLifetime.cs').read_text(encoding='utf-8')
+        tests=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerFixtureLifetimeTests.cs').read_text(encoding='utf-8')
+        self.assertIn('linked.CancelAfter(timeout)',text)
         self.assertIn('finally',text)
-        self.assertIn('new AggregateException(primaryFailure!, cleanupFailure)',text)
-        self.assertLess(text.index('DisposeOneAsync("redis"'),text.index('DisposeOneAsync("postgres"'))
-        self.assertIn('ExceptionDispatchInfo.Capture(primaryFailure).Throw()',text)
+        self.assertIn('ExceptionDispatchInfo.Capture(primary).Throw()',text)
+        self.assertIn('cleanupFailures.Add(error)',text)
+        self.assertIn('group.Select(ReleaseOnce).ToArray()',text)
+        self.assertIn('releases.GroupBy(item => item.Order).OrderBy(item => item.Key)',text)
+        # Both independent providers are started before joining; a blocked Redis release cannot prevent PostgreSQL release.
+        self.assertIn('IndependentSameTierReleases_StartBeforeFirstJoin',tests)
+        self.assertIn('FirstReleaseFailure_DoesNotSkipOtherTiers',tests)
+        self.assertIn('PrimaryFailure_IsSameObjectWhenCleanupFails',tests)
+        self.assertIn('BoundedObservation_DoesNotSettleStillOwnedStartupOrRelease',tests)
+        self.assertIn('cleanup.WaitAsync(TimeSpan.FromMilliseconds(30))',tests)
 
     def test_startup_task_settlement_precedes_disposal_and_unsettled_refuses_claim(self):
-        text=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteFixtureLifetime.cs').read_text(encoding='utf-8')
-        self.assertIn('Operation = operation',text)
-        self.assertIn('Cancellation = cancellation',text)
-        self.assertLess(text.index('evidence.Operation!.WaitAsync'),text.index('evidence.CleanupAttempted = true'))
-        self.assertIn('new StartupUnsettledException(evidence)',text)
-        self.assertIn('settlementBudget > CleanupTimeout',text)
-        fixture=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteHttpTests.cs').read_text(encoding='utf-8')
-        self.assertIn('if (!startupEvidence.Settled)',fixture)
-        self.assertIn('TimeSpan.FromSeconds(120), startupEvidence',fixture)
+        text=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerFixtureLifetime.cs').read_text(encoding='utf-8')
+        tests=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerFixtureLifetimeTests.cs').read_text(encoding='utf-8')
+        self.assertIn('entry.Actual = ExecuteEntry',text)
+        self.assertIn('CancellationTokenSource.CreateLinkedTokenSource(stop.Token, caller)',text)
+        self.assertLess(text.index('await entry.Actual;'),text.index('var tasks = group.Select(ReleaseOnce)'))
+        self.assertIn('pending.Where(item => !joined.Contains(item.Id))',text)
+        self.assertIn('LateCreation_IsJoinedAndReleasedDuringDispose',tests)
+        self.assertIn('CancellationProxy_DoesNotDetachActualLateWork',tests)
+        self.assertIn('Assert.Same(cleanup, lifetime.DisposeAsync())',tests)
+        self.assertIn('Assert.False(cleanup.IsCompleted)',tests)
+        self.assertIn('Assert.DoesNotContain(events, item => item.Stage == "managed-terminal")',tests)
+        self.assertIn('await Task.WhenAll(actual, cleanup).WaitAsync(Bound)',tests)
 
     def test_real_host_proof_uses_actual_inspection_and_exact_not_found(self):
         text=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteFixtureNativeResourceTests.cs').read_text(encoding='utf-8')
         self.assertIn('InspectContainerAsync(id, cancellation)',text)
         self.assertIn('HttpStatusCode.NotFound, actual.StatusCode',text)
         self.assertIn('db.Database.CanConnectAsync',text)
-        self.assertIn('await fixture.RedisResource.StartAsync(cancellation)',text)
+        self.assertIn('fixture = new CareerRouteFixture(async cancellation =>',text)
+        self.assertIn('redisId = fixture.RedisResource.Id',text)
+        fixture=(ROOT/'Legacy.Maliev.CareerService.Tests/Controllers/CareerRouteHttpTests.cs').read_text(encoding='utf-8')
+        self.assertLess(fixture.index('lifetime.ObserveOwned(redis)'),fixture.index('await afterProvidersStarted(cancellation)'))
+        self.assertIn('fixture.DisposeAsync().WaitAsync(TimeSpan.FromSeconds(30))',text)
+        self.assertIn('Assert.DoesNotContain(actual.Mounts, mount => mount.Type != "tmpfs")',text)
         self.assertIn('throw primary',text)
         self.assertNotIn('actual.Config.Env',text)
 

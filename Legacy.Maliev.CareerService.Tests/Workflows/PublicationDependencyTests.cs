@@ -2,8 +2,10 @@ using YamlDotNet.RepresentationModel;
 
 namespace Legacy.Maliev.CareerService.Tests.Workflows;
 
+/// <summary>Checks pinned image-build dependencies without changing deployment admission.</summary>
 public sealed class PublicationDependencyTests
 {
+    /// <summary>Checks that publication supplies pinned dependencies while the deployment gate stays closed.</summary>
     [Fact]
     public void Publisher_ProvidesPinnedDockerDependencies_WithoutOpeningDeploymentGate()
     {
