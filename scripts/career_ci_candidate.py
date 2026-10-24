@@ -203,6 +203,71 @@ def audit_no_vulnerabilities(raw):
     return {'auditedProjects':sorted(actual),'vulnerabilities':0,'nativeResultsProven':False}
 
 
+def audit_completed_report(raw, sdk_raw, root=ROOT):
+    # NuGet's format1 renderer omits frameworks when no packages match
+    # --vulnerable. Restored assets witness inventory, never vulnerability results.
+    audit=json.loads(raw)
+    sdk_identity=json.loads(sdk_raw)
+    sdk=sdk_identity.get('sdkVersion') if isinstance(sdk_identity,dict) else None
+    if type(sdk) is not str or not re.fullmatch(r'10\.0\.[0-9]+',sdk):
+        raise ValueError('Actual .NET10 SDK identity required')
+    if (not isinstance(audit,dict) or type(audit.get('version')) is not int or
+        audit['version']!=1 or audit.get('parameters')!='--vulnerable --include-transitive' or
+        audit.get('sources')!=['https://api.nuget.org/v3/index.json'] or
+        audit.get('problems',[])!=[]):
+        raise ValueError('Complete successful vulnerability report metadata required')
+    projects=audit.get('projects')
+    if not isinstance(projects,list) or len(projects)!=5:
+        raise ValueError('Exact five-project Career audit inventory required')
+    root=Path(root).resolve(strict=True)
+    expected={'Legacy.Maliev.CareerService.'+name for name in ('Domain','Application','Api','Data','Tests')}
+    seen=set();assets_hashes={};project_hashes={};omitted=[]
+    for project in projects:
+        if not isinstance(project,dict) or set(project)-{'path','frameworks'} or type(project.get('path')) is not str:
+            raise ValueError('Exact audit project identity required')
+        name=Path(project['path']).stem
+        if name not in expected or name in seen:
+            raise ValueError('Exact five-project Career audit inventory required')
+        seen.add(name)
+        directory=root/name;project_path=directory/(name+'.csproj');assets_path=directory/'obj/project.assets.json'
+        for path in (directory,directory/'obj',project_path,assets_path):
+            if path.is_symlink() or path.resolve(strict=True)!=path:
+                raise ValueError('Canonical same-checkout audit inventory required')
+        if not project_path.is_file() or not assets_path.is_file() or Path(project['path']).resolve(strict=True)!=project_path:
+            raise ValueError('Canonical same-checkout audit inventory required')
+        assets_raw=assets_path.read_bytes();assets=json.loads(assets_raw)
+        if not isinstance(assets,dict) or type(assets.get('version')) is not int or assets['version'] not in (3,4):
+            raise ValueError('Restored framework inventory unavailable')
+        restored=assets.get('project')
+        if not isinstance(restored,dict) or not isinstance(restored.get('restore'),dict):
+            raise ValueError('Restored framework inventory unavailable')
+        restore=restored['restore']
+        if (not isinstance(assets.get('targets'),dict) or set(assets['targets'])!={'net10.0'} or
+            not isinstance(restored.get('frameworks'),dict) or set(restored['frameworks'])!={'net10.0'} or
+            not isinstance(assets['targets']['net10.0'],dict) or not isinstance(restored['frameworks']['net10.0'],dict) or
+            restore.get('projectName')!=name or restore.get('originalTargetFrameworks')!=['net10.0'] or
+            type(restore.get('projectPath')) is not str or Path(restore['projectPath']).resolve(strict=True)!=project_path):
+            raise ValueError('Exact restored net10.0 project inventory required')
+        assets_hashes[name]=digest(assets_raw);project_hashes[name]=digest(project_path.read_bytes())
+        if 'frameworks' not in project:
+            if sdk!='10.0.402':
+                raise ValueError('Omitted frameworks require the reviewed .NET10.0.402 renderer')
+            # Only the verified renderer omission is interpreted. Explicit null,
+            # empty, malformed or wrong framework data still reaches strict refusal.
+            project['frameworks']=[{'framework':'net10.0'}]
+            omitted.append(name)
+        elif not isinstance(project['frameworks'],list) or len(project['frameworks'])!=1:
+            raise ValueError('Exact actual net10.0 audit framework identity required')
+    result=audit_no_vulnerabilities(json.dumps(audit))
+    result.update(rawAuditSha256=digest(raw),sdkVersion=sdk,sdkIdentitySha256=digest(sdk_raw),
+                  restoredAssetsSha256=assets_hashes,projectSha256=project_hashes,
+                  omittedCleanFrameworkProjects=sorted(omitted),
+                  inventoryIsNotVulnerabilityScan=True,
+                  rendererSource='dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6',
+                  rendererBlob='cdaef0463cbb9a9aee161dbbea28e5b7436451af')
+    return result
+
+
 FOCUSED_NAMESPACE = 'Legacy.Maliev.CareerService.Tests.Controllers.'
 FOCUSED_ASSEMBLY = 'Legacy.Maliev.CareerService.Tests.dll'
 UNIT_TEST_TYPE = '13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b'
@@ -330,7 +395,9 @@ def main():
         print(json.dumps(verify_focused(sys.argv[2]),sort_keys=True))
         return
     if len(sys.argv)==3 and sys.argv[1]=='audit':
-        print(json.dumps(audit_no_vulnerabilities(Path(sys.argv[2]).read_bytes()),sort_keys=True))
+        report=Path(sys.argv[2])
+        sdk=report.with_name('career-candidate-package-audit-sdk.json').read_bytes()
+        print(json.dumps(audit_completed_report(report.read_bytes(),sdk),sort_keys=True))
         return
     if len(sys.argv)!=1:raise ValueError('Closed candidate/audit invocation required')
     binding=require_qualified_scanners()

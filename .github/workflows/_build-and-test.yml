@@ -91,6 +91,7 @@ jobs:
           set -euo pipefail
           export GITHUB_ACTIONS=false
           python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-audit-memory.json"
+          timeout --signal=TERM --kill-after=5s 10s dotnet --version | python3 -c 'import json,sys; json.dump({"sdkVersion":sys.stdin.read().strip()},sys.stdout)' > "$RUNNER_TEMP/career-candidate-package-audit-sdk.json"
           timeout --signal=TERM --kill-after=5s 120s dotnet list Legacy.Maliev.CareerService.slnx package --vulnerable --include-transitive --no-restore --format json > "$RUNNER_TEMP/career-candidate-package-audit.json"
           python3 -B scripts/career_ci_candidate.py audit "$RUNNER_TEMP/career-candidate-package-audit.json" | tee "$RUNNER_TEMP/career-candidate-package-audit-gate.json"
       - name: Validate safe scaffold orchestration

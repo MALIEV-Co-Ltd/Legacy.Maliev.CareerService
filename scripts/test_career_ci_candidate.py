@@ -625,4 +625,113 @@ class CandidateControls(unittest.TestCase):
         self.assertEqual(len(policy['files']),17)
         self.refused_without_write(policy=policy)
 
+class CompletedAuditControls(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name).resolve()
+        self.sdk=json.dumps({'sdkVersion':'10.0.402'}).encode()
+        self.report={'version':1,'parameters':'--vulnerable --include-transitive',
+                     'sources':['https://api.nuget.org/v3/index.json'],'projects':[]}
+        self.assets=[]
+        for suffix in ('Domain','Application','Api','Data','Tests'):
+            name='Legacy.Maliev.CareerService.'+suffix
+            project=self.root/name/(name+'.csproj');project.parent.mkdir()
+            project.write_text('<Project Sdk="Microsoft.NET.Sdk"/>')
+            asset=project.parent/'obj/project.assets.json';asset.parent.mkdir()
+            data={'version':4,'targets':{'net10.0':{}},'project':{
+                'frameworks':{'net10.0':{}},'restore':{'projectPath':str(project),
+                'projectName':name,'originalTargetFrameworks':['net10.0']}}}
+            asset.write_text(json.dumps(data));self.assets.append(asset)
+            self.report['projects'].append({'path':str(project)})
+
+    def run_report(self,report=None):
+        raw=json.dumps(self.report if report is None else report).encode()
+        return candidate.audit_completed_report(raw,self.sdk,self.root)
+
+    def test_official_clean_omission_requires_independent_complete_inventory(self):
+        raw=json.dumps(self.report).encode();before=bytes(raw)
+        with self.assertRaisesRegex(ValueError,'framework data unavailable'):
+            candidate.audit_no_vulnerabilities(raw)
+        result=candidate.audit_completed_report(raw,self.sdk,self.root)
+        self.assertEqual(raw,before)
+        self.assertEqual(result['vulnerabilities'],0)
+        self.assertEqual(len(result['omittedCleanFrameworkProjects']),5)
+        self.assertEqual(len(result['restoredAssetsSha256']),5)
+        self.assertEqual(result['rawAuditSha256'],hashlib.sha256(raw).hexdigest())
+        self.assertTrue(result['inventoryIsNotVulnerabilityScan'])
+
+    def test_mixed_explicit_and_omitted_clean_frameworks_preserve_evidence(self):
+        self.report['projects'][0]['frameworks']=[{'framework':'net10.0'}]
+        self.assertEqual(len(self.run_report()['omittedCleanFrameworkProjects']),4)
+        self.assertEqual(candidate.audit_no_vulnerabilities(json.dumps(CandidateControls.audit(self)))['vulnerabilities'],0)
+
+    def test_report_metadata_and_problem_records_fail_closed(self):
+        for key,values in {'version':[None,True,2],'parameters':['','--vulnerable','--include-transitive'],
+                           'sources':[None,[],['https://example.invalid']],
+                           'problems':[None,{},[{'level':'warning'}],[{'level':'error'}]]}.items():
+            for value in values:
+                with self.subTest(key=key,value=value):
+                    report=copy.deepcopy(self.report);report[key]=value
+                    with self.assertRaises(ValueError):self.run_report(report)
+        for version in (None,'','9.0.100','10.0.401','10.0.403','10.0.402 extra'):
+            with self.assertRaises(ValueError):
+                candidate.audit_completed_report(json.dumps(self.report).encode(),json.dumps({'sdkVersion':version}).encode(),self.root)
+
+    def test_missing_duplicate_foreign_or_unbound_project_refused(self):
+        for mutation in ('missing','duplicate','foreign','unbound'):
+            report=copy.deepcopy(self.report)
+            if mutation=='missing':report['projects'].pop()
+            if mutation=='duplicate':report['projects'][-1]=copy.deepcopy(report['projects'][0])
+            if mutation=='foreign':report['projects'][0]['path']=str(self.root/'Foreign.csproj')
+            if mutation=='unbound':report['projects'][0]['path']=str(self.root/'foreign'/Path(report['projects'][0]['path']).name)
+            with self.subTest(mutation=mutation),self.assertRaises((ValueError,OSError)):
+                self.run_report(report)
+
+    def test_explicit_invalid_frameworks_never_use_inventory_substitution(self):
+        for frameworks in (None,[],{},[{}],[{'framework':'net9.0'}],
+                           [{'framework':'net10.0'},{'framework':'net10.0'}]):
+            report=copy.deepcopy(self.report);report['projects'][0]['frameworks']=frameworks
+            with self.subTest(frameworks=frameworks),self.assertRaises(ValueError):self.run_report(report)
+
+    def test_missing_or_inconsistent_assets_never_prove_framework_inventory(self):
+        asset=self.assets[0];original=asset.read_bytes()
+        for mutation in ('missing','null','version','targets','frameworks','restore','path','name','original'):
+            try:
+                data=json.loads(original)
+                if mutation=='missing':asset.unlink()
+                else:
+                    if mutation=='null':data=None
+                    if mutation=='version':data['version']=True
+                    if mutation=='targets':data['targets']={'net9.0':{}}
+                    if mutation=='frameworks':data['project']['frameworks']={}
+                    if mutation=='restore':data['project']['restore']=None
+                    if mutation=='path':data['project']['restore']['projectPath']=str(self.root/'unbound.csproj')
+                    if mutation=='name':data['project']['restore']['projectName']='Foreign'
+                    if mutation=='original':data['project']['restore']['originalTargetFrameworks']=['net9.0']
+                    asset.write_text(json.dumps(data))
+                with self.subTest(mutation=mutation),self.assertRaises((ValueError,OSError)):self.run_report()
+            finally:asset.write_bytes(original)
+
+    def test_linked_inventory_is_refused_before_reading_assets(self):
+        with patch.object(Path,'is_symlink',return_value=True),self.assertRaisesRegex(ValueError,'Canonical'):
+            self.run_report()
+
+    def test_direct_and_transitive_vulnerabilities_and_malformed_entries_refused(self):
+        for key in ('topLevelPackages','transitivePackages'):
+            for value in ([{'severity':'Low','advisoryurl':'https://example.invalid/advisory'}],None,{},[{}]):
+                report=copy.deepcopy(self.report)
+                report['projects'][0]['frameworks']=[{'framework':'net10.0',key:[{'id':'Affected','vulnerabilities':value}]}]
+                with self.subTest(key=key,value=value),self.assertRaises(ValueError):self.run_report(report)
+
+    def test_active_cli_binds_sdk_identity_and_preserves_raw_audit(self):
+        text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
+        step=text.split('name: Verify complete JSON package audit')[1].split('      - name:')[0]
+        self.assertIn('10s dotnet --version',step)
+        self.assertIn('career-candidate-package-audit-sdk.json',step)
+        self.assertIn('120s dotnet list',step)
+        self.assertIn('set -euo pipefail',step)
+        self.assertIn('career-candidate-package-audit*.json',text)
+        with patch('sys.argv',['career_ci_candidate.py','audit','one','external-assets']),self.assertRaisesRegex(ValueError,'Closed'):
+            candidate.main()
+
 if __name__=='__main__':unittest.main()
