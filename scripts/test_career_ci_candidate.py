@@ -114,10 +114,10 @@ class CandidateControls(unittest.TestCase):
         text=(HERE.parent/'.github/workflows/_build-and-test.yml').read_text()
         focus=text.split('name: Build Release and run changed-behavior regressions before full suite')[1].split('      - name:')[0]
         self.assertIn('timeout-minutes: 20',focus)
-        self.assertEqual(focus.count('python3 -B scripts/career_required_ci_preflight.py'),5)
+        self.assertEqual(focus.count('python3 -B scripts/career_required_ci_preflight.py'),6)
         for command in ('restore','build','test'):
             self.assertIn('timeout --signal=TERM --kill-after=5s 300s dotnet '+command,focus)
-        self.assertEqual(focus.count('300s dotnet test'),3)
+        self.assertEqual(focus.count('300s dotnet test'),4)
         shared=text.split('name: Check fresh memory before shared validation')[1].split('name: Verify complete JSON package audit')[0]
         self.assertIn('scripts/career_required_ci_preflight.py',shared)
         self.assertIn('timeout-minutes: 10',shared)

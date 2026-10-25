@@ -83,7 +83,7 @@ public sealed class CareerRepository(CareerDbContext dbContext) : ICareerReposit
 
     /// <inheritdoc />
     public Task<JobOffer?> GetOfferByIdAsync(int id, CancellationToken cancellationToken) =>
-        dbContext.Offers.Include(offer => offer.Level).AsNoTracking()
+        dbContext.Offers.AsNoTracking()
             .SingleOrDefaultAsync(offer => offer.Id == id, cancellationToken);
 
     /// <inheritdoc />

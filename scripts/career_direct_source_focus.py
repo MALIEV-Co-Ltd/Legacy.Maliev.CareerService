@@ -50,12 +50,12 @@ BOUNDARY_ROSTER = frozenset({
     'Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalBoundaryRetentionHttpTests.OriginalFourOfferFilledCohort_PreservesPublicBoolean(hasOpenPositions: False)',
     'Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalBoundaryRetentionHttpTests.OriginalFourOfferFilledCohort_PreservesPublicBoolean(hasOpenPositions: True)',
 })
-FILTERS = ('FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor|FullyQualifiedName~SelectedOfferDeletion_PreservesSharedLevelsAndSurvivorsAndRecomputesGlobalOpenStatus|FullyQualifiedName~LevelGraph_|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerFixtureLifetimeTests', 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalBoundaryRetentionHttpTests', 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalPaginationWireHttpTests|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerRouteFixtureNativeResourceTests')
+FILTERS = ('FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor|FullyQualifiedName~SelectedOfferDeletion_PreservesSharedLevelsAndSurvivorsAndRecomputesGlobalOpenStatus|FullyQualifiedName~LevelGraph_|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerFixtureLifetimeTests', 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalBoundaryRetentionHttpTests', 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalPaginationWireHttpTests|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerRouteFixtureNativeResourceTests', 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOfferDetailSourceHttpTests')
 
 def verify_workflow(path):
     expressions=re.findall(r"--filter '([^']+)'", Path(path).read_text(encoding="utf-8"))
     if tuple(expressions)!=FILTERS:
-        raise ValueError("Exact current26, original6, and pagination/native4 filters required")
+        raise ValueError("Exact current26, original6, pagination/native4 and offer-detail5 filters required")
     return expressions
 
 def main():

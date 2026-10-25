@@ -31,6 +31,9 @@ public sealed class WorkflowContractTests
             ("FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor", "FullyQualifiedName~NoSuchTests"),
             ("|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerFixtureLifetimeTests", ""),
             ("Total:[[:space:]]+26,", "Total:[[:space:]]+0,"),
+            ("FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOfferDetailSourceHttpTests", "FullyQualifiedName~NoSuchDetailTests"),
+            ("Total:[[:space:]]+5,", "Total:[[:space:]]+0,"),
+            ("python3 -B scripts/career_offer_detail_focus.py", "python3 -B scripts/unreviewed_detail_focus.py"),
             ("timeout-minutes: 20", "timeout-minutes: 21"),
             ("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68", "actions/setup-dotnet@main"),
             ("Build Release and run changed-behavior regressions before full suite", "Unreviewed focused regression"),
@@ -227,7 +230,7 @@ internal static partial class WorkflowContractValidator
     private const string MemoryAdmissionCommand = """
         set -euo pipefail
         python3 -B -c 'from pathlib import Path; [compile((Path("scripts")/name).read_bytes(), name, "exec") for name in ("career_required_ci_preflight.py", "test_career_required_ci_preflight.py")]'
-        (cd scripts && timeout --signal=TERM --kill-after=5s 30s python3 -B -m unittest test_career_required_ci_preflight test_career_ci_candidate -v)
+        (cd scripts && timeout --signal=TERM --kill-after=5s 30s python3 -B -m unittest test_career_required_ci_preflight test_career_ci_candidate test_career_offer_detail_focus -v)
         python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-sdk-memory-preflight.json"
         """;
     private const string FocusCommand = """
@@ -254,6 +257,11 @@ internal static partial class WorkflowContractValidator
         VSTestCollect='' timeout --signal=TERM --kill-after=5s 300s dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalPaginationWireHttpTests|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerRouteFixtureNativeResourceTests' --logger 'trx;LogFileName=career-pagination-wire.trx' --results-directory runner-results/pagination-wire 2>&1 | tee runner-results/pagination-wire/test.log
         grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+4, Skipped:[[:space:]]+0, Total:[[:space:]]+4,' runner-results/pagination-wire/test.log
         python3 -B scripts/career_direct_source_focus.py wire runner-results/pagination-wire | tee runner-results/pagination-wire/identity-gate.json
+        mkdir -p runner-results/offer-detail
+        python3 -B scripts/career_required_ci_preflight.py | tee runner-results/offer-detail/memory.json
+        VSTestCollect='' timeout --signal=TERM --kill-after=5s 300s dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOfferDetailSourceHttpTests' --logger 'trx;LogFileName=career-offer-detail.trx' --results-directory runner-results/offer-detail 2>&1 | tee runner-results/offer-detail/test.log
+        grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+5, Skipped:[[:space:]]+0, Total:[[:space:]]+5,' runner-results/offer-detail/test.log
+        python3 -B scripts/career_offer_detail_focus.py runner-results/offer-detail | tee runner-results/offer-detail/identity-gate.json
         """;
 
     private const string AuditCommand = """
