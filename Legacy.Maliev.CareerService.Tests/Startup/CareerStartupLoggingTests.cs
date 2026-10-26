@@ -8,6 +8,7 @@ using System.Text.Json;
 using Legacy.Maliev.CareerService.Application.Interfaces;
 using Legacy.Maliev.CareerService.Data;
 using Legacy.Maliev.CareerService.Domain;
+using Legacy.Maliev.CareerService.Tests.Controllers;
 using Legacy.Maliev.CareerService.Api.Logging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -24,7 +25,6 @@ using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Hosting;
 using Moq;
-using Testcontainers.PostgreSql;
 
 namespace Legacy.Maliev.CareerService.Tests.Startup;
 
@@ -42,24 +42,25 @@ public sealed class CareerStartupLoggingTests
     [InlineData("/Jobs/acceptance-save", "DbUpdateException")]
     public async Task ProductionDatabaseFailure_DoesNotEmitProviderExceptionTextOrStacks(string path, string exceptionType)
     {
-        await using var postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-        await postgres.StartAsync();
-        // Intentionally no schema: a real read fails without writing application data.
-        using var factory = new CareerFactory(postgres.GetConnectionString());
-        using var client = factory.CreateClient();
-        using var response = await client.GetAsync(path);
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("PostgresException", body);
-        using var failure = factory.Failure();
-        Assert.Equal(exceptionType, failure.RootElement.GetProperty("ExceptionType").GetString());
-        Assert.All(factory.Logs.Lines, line =>
+        await CareerOwnedPostgresCase.RunAsync("startup-database-failure", async (postgres, cancellation) =>
         {
-            Assert.DoesNotContain("42P01", line);
-            Assert.DoesNotContain("does not exist", line);
-            Assert.DoesNotContain("Npgsql.Internal", line);
-            Assert.DoesNotContain("SELECT", line);
-            Assert.DoesNotContain(Sensitive, line);
+            // Intentionally no schema: a real read fails without writing application data.
+            using var factory = new CareerFactory(postgres.GetConnectionString());
+            using var client = factory.CreateClient();
+            using var response = await client.GetAsync(path, cancellation);
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync(cancellation);
+            Assert.DoesNotContain("PostgresException", body);
+            using var failure = factory.Failure();
+            Assert.Equal(exceptionType, failure.RootElement.GetProperty("ExceptionType").GetString());
+            Assert.All(factory.Logs.Lines, line =>
+            {
+                Assert.DoesNotContain("42P01", line);
+                Assert.DoesNotContain("does not exist", line);
+                Assert.DoesNotContain("Npgsql.Internal", line);
+                Assert.DoesNotContain("SELECT", line);
+                Assert.DoesNotContain(Sensitive, line);
+            });
         });
     }
 

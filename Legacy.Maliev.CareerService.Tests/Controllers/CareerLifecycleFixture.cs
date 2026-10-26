@@ -41,13 +41,15 @@ public sealed class CareerLifecycleFixture : IAsyncLifetime
         {
             key = lifetime.Create("key", 3, () => RSA.Create(2048), value => { value.Dispose(); return ValueTask.CompletedTask; });
             postgres = lifetime.Create("postgres", 4,
-                () => new PostgreSqlBuilder("postgres:18-alpine").WithLabel("com.maliev.career.fixture", lifetime.FixtureId).Build(),
-                value => value.DisposeAsync(), value => CareerFixtureLifetime.ObserveContainer(value, "postgres:18-alpine"));
+                () => new PostgreSqlBuilder("postgres:18-alpine").WithLabel("com.maliev.career.fixture", lifetime.FixtureId)
+                    .WithCreateParameterModifier(parameters => CareerFixtureContainerLimits.Postgres(parameters, lifetime.FixtureId)).Build(),
+                value => CareerFixtureContainerLimits.ReleaseAsync(value, lifetime.FixtureId), value => CareerFixtureLifetime.ObserveContainer(value, "postgres:18-alpine"));
             redis = lifetime.Create("redis", 4,
                 () => new ContainerBuilder("redis:8-alpine").WithPortBinding(6379, true)
                     .WithLabel("com.maliev.career.fixture", lifetime.FixtureId)
-                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build(),
-                value => value.DisposeAsync(), value => CareerFixtureLifetime.ObserveContainer(value, "redis:8-alpine"));
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                    .WithCreateParameterModifier(parameters => CareerFixtureContainerLimits.Redis(parameters, lifetime.FixtureId)).Build(),
+                value => CareerFixtureContainerLimits.ReleaseAsync(value, lifetime.FixtureId), value => CareerFixtureLifetime.ObserveContainer(value, "redis:8-alpine"));
         }
         catch (Exception primary)
         {
@@ -73,9 +75,9 @@ public sealed class CareerLifecycleFixture : IAsyncLifetime
         {
             await lifetime.RunAsync("initialize", async cancellation =>
             {
-                await lifetime.RunAsync("postgres-start", token => postgres.StartAsync(token), TimeSpan.FromMinutes(4), cancellation);
+                await lifetime.RunAsync("postgres-start", token => { CareerFixtureContainerLimits.RequireFreshAdmission(); return postgres.StartAsync(token); }, TimeSpan.FromSeconds(120), cancellation);
                 lifetime.ObserveOwned(postgres);
-                await lifetime.RunAsync("redis-start", token => redis.StartAsync(token), TimeSpan.FromMinutes(4), cancellation);
+                await lifetime.RunAsync("redis-start", token => { CareerFixtureContainerLimits.RequireFreshAdmission(); return redis.StartAsync(token); }, TimeSpan.FromSeconds(120), cancellation);
                 lifetime.ObserveOwned(redis);
                 await lifetime.UseOwnedAsync(Context, (db, token) => db.Database.MigrateAsync(token), cancellation);
                 Factory = NewFactory();

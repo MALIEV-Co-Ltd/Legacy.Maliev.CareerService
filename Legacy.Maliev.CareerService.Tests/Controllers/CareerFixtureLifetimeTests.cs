@@ -189,6 +189,51 @@ public sealed class CareerFixtureLifetimeTests
         finally { release.TrySetResult(); await lifetime.DisposeAsync().WaitAsync(Bound); }
     }
 
+    /// <summary>Checks that a bounded cleanup observation leaves live work owned until actual completion.</summary>
+    /// <param name="duringRelease">Whether the noncooperative operation is cleanup rather than startup.</param>
+    /// <returns>A task completing both the refusal and eventual exact release assertions.</returns>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BoundedObservation_DoesNotSettleStillOwnedStartupOrRelease(bool duringRelease)
+    {
+        var events = new ConcurrentQueue<CareerFixtureEvent>();
+        var lifetime = new CareerFixtureLifetime("bounded-observation", events.Enqueue);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releases = 0;
+        Task actual = Task.CompletedTask;
+        try
+        {
+            if (duringRelease)
+                lifetime.Create("redis", 4, () => new Dummy(), async _ =>
+                {
+                    entered.TrySetResult();
+                    await release.Task;
+                    releases++;
+                });
+            else
+                actual = lifetime.RunAsync("held-startup", async _ =>
+                {
+                    entered.TrySetResult();
+                    await release.Task;
+                    lifetime.Create("redis", 4, () => new Dummy(), _ => { releases++; return ValueTask.CompletedTask; });
+                }, Bound);
+            var cleanup = lifetime.DisposeAsync();
+            await entered.Task.WaitAsync(Bound);
+            await Assert.ThrowsAsync<TimeoutException>(() => cleanup.WaitAsync(TimeSpan.FromMilliseconds(30)));
+            Assert.Same(cleanup, lifetime.DisposeAsync());
+            Assert.False(cleanup.IsCompleted);
+            Assert.Equal(0, releases);
+            Assert.DoesNotContain(events, item => item.Stage == "managed-terminal");
+            release.TrySetResult();
+            await Task.WhenAll(actual, cleanup).WaitAsync(Bound);
+            Assert.Equal(1, releases);
+            Assert.Single(events, item => item.Stage == "managed-terminal");
+        }
+        finally { release.TrySetResult(); await Task.WhenAll(actual, lifetime.DisposeAsync()).WaitAsync(Bound); }
+    }
+
     /// <summary>Checks independent same tier releases: start before first join.</summary>
     /// <returns>A task that completes after checking the retained operation and cleanup outcome.</returns>
     [Fact]
