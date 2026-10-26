@@ -626,10 +626,13 @@ class CandidateControls(unittest.TestCase):
         self.refused_without_write(policy=policy)
 
 class CompletedAuditControls(unittest.TestCase):
+    SDK_VERSION='10.0.402'
+    RENDERER_SOURCE='dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6'
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name).resolve()
-        self.sdk=json.dumps({'sdkVersion':'10.0.402'}).encode()
+        self.sdk=json.dumps({'sdkVersion':self.SDK_VERSION}).encode()
         self.report={'version':1,'parameters':'--vulnerable --include-transitive',
                      'sources':['https://api.nuget.org/v3/index.json'],'projects':[]}
         self.assets=[]
@@ -658,11 +661,25 @@ class CompletedAuditControls(unittest.TestCase):
         self.assertEqual(len(result['omittedCleanFrameworkProjects']),5)
         self.assertEqual(len(result['restoredAssetsSha256']),5)
         self.assertEqual(result['rawAuditSha256'],hashlib.sha256(raw).hexdigest())
+        self.assertEqual(result['sdkIdentitySha256'],hashlib.sha256(self.sdk).hexdigest())
+        self.assertEqual(result['sdkVersion'],self.SDK_VERSION)
+        self.assertEqual(result['rendererSource'],self.RENDERER_SOURCE)
+        self.assertEqual(result['rendererBlob'],'cdaef0463cbb9a9aee161dbbea28e5b7436451af')
+        for name, actual in result['restoredAssetsSha256'].items():
+            self.assertEqual(actual,hashlib.sha256((self.root/name/'obj/project.assets.json').read_bytes()).hexdigest())
+        for name, actual in result['projectSha256'].items():
+            self.assertEqual(actual,hashlib.sha256((self.root/name/(name+'.csproj')).read_bytes()).hexdigest())
         self.assertTrue(result['inventoryIsNotVulnerabilityScan'])
 
     def test_mixed_explicit_and_omitted_clean_frameworks_preserve_evidence(self):
         self.report['projects'][0]['frameworks']=[{'framework':'net10.0'}]
-        self.assertEqual(len(self.run_report()['omittedCleanFrameworkProjects']),4)
+        raw=json.dumps(self.report).encode()
+        result=self.run_report()
+        self.assertEqual(len(result['omittedCleanFrameworkProjects']),4)
+        self.assertEqual(result['rawAuditSha256'],hashlib.sha256(raw).hexdigest())
+        self.assertEqual(result['sdkIdentitySha256'],hashlib.sha256(self.sdk).hexdigest())
+        self.assertEqual(result['rendererSource'],self.RENDERER_SOURCE)
+        self.assertEqual(result['rendererBlob'],'cdaef0463cbb9a9aee161dbbea28e5b7436451af')
         self.assertEqual(candidate.audit_no_vulnerabilities(json.dumps(CandidateControls.audit(self)))['vulnerabilities'],0)
 
     def test_report_metadata_and_problem_records_fail_closed(self):
@@ -673,9 +690,27 @@ class CompletedAuditControls(unittest.TestCase):
                 with self.subTest(key=key,value=value):
                     report=copy.deepcopy(self.report);report[key]=value
                     with self.assertRaises(ValueError):self.run_report(report)
-        for version in (None,'','9.0.100','10.0.401','10.0.403','10.0.402 extra'):
+        for version in (None,'','9.0.100','10.0.401','10.0.404','10.0.402 extra',
+                        '10.0.403 extra','10.0.403-preview.1'):
             with self.assertRaises(ValueError):
                 candidate.audit_completed_report(json.dumps(self.report).encode(),json.dumps({'sdkVersion':version}).encode(),self.root)
+
+    def test_unreviewed_sdk_with_complete_explicit_frameworks_has_no_renderer_attribution(self):
+        report=copy.deepcopy(self.report)
+        for project in report['projects']:
+            project['frameworks']=[{'framework':'net10.0'}]
+        raw=json.dumps(report).encode()
+        sdk=json.dumps({'sdkVersion':'10.0.404'}).encode()
+        result=candidate.audit_completed_report(raw,sdk,self.root)
+        self.assertEqual(result['vulnerabilities'],0)
+        self.assertEqual(result['omittedCleanFrameworkProjects'],[])
+        self.assertEqual(result['sdkVersion'],'10.0.404')
+        self.assertEqual(result['rawAuditSha256'],hashlib.sha256(raw).hexdigest())
+        self.assertEqual(result['sdkIdentitySha256'],hashlib.sha256(sdk).hexdigest())
+        self.assertIsNone(result['rendererSource'])
+        self.assertIsNone(result['rendererBlob'])
+        self.assertEqual(len(result['restoredAssetsSha256']),5)
+        self.assertEqual(len(result['projectSha256']),5)
 
     def test_missing_duplicate_foreign_or_unbound_project_refused(self):
         for mutation in ('missing','duplicate','foreign','unbound'):
@@ -733,5 +768,10 @@ class CompletedAuditControls(unittest.TestCase):
         self.assertIn('career-candidate-package-audit*.json',text)
         with patch('sys.argv',['career_ci_candidate.py','audit','one','external-assets']),self.assertRaisesRegex(ValueError,'Closed'):
             candidate.main()
+
+class CompletedAudit403Controls(CompletedAuditControls):
+    SDK_VERSION='10.0.403'
+    RENDERER_SOURCE='dotnet/dotnet@5a2162bea6845eabc1fc721624a43568c65db3b1'
+
 
 if __name__=='__main__':unittest.main()

@@ -206,6 +206,11 @@ def audit_no_vulnerabilities(raw):
 def audit_completed_report(raw, sdk_raw, root=ROOT):
     # NuGet's format1 renderer omits frameworks when no packages match
     # --vulnerable. Restored assets witness inventory, never vulnerability results.
+    # Both exact official SDK source tags contain the same reviewed renderer blob.
+    reviewed_renderers={
+        '10.0.402':'dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6',
+        '10.0.403':'dotnet/dotnet@5a2162bea6845eabc1fc721624a43568c65db3b1',
+    }
     audit=json.loads(raw)
     sdk_identity=json.loads(sdk_raw)
     sdk=sdk_identity.get('sdkVersion') if isinstance(sdk_identity,dict) else None
@@ -250,8 +255,8 @@ def audit_completed_report(raw, sdk_raw, root=ROOT):
             raise ValueError('Exact restored net10.0 project inventory required')
         assets_hashes[name]=digest(assets_raw);project_hashes[name]=digest(project_path.read_bytes())
         if 'frameworks' not in project:
-            if sdk!='10.0.402':
-                raise ValueError('Omitted frameworks require the reviewed .NET10.0.402 renderer')
+            if sdk not in reviewed_renderers:
+                raise ValueError('Omitted frameworks require a reviewed exact .NET10 SDK renderer')
             # Only the verified renderer omission is interpreted. Explicit null,
             # empty, malformed or wrong framework data still reaches strict refusal.
             project['frameworks']=[{'framework':'net10.0'}]
@@ -263,8 +268,9 @@ def audit_completed_report(raw, sdk_raw, root=ROOT):
                   restoredAssetsSha256=assets_hashes,projectSha256=project_hashes,
                   omittedCleanFrameworkProjects=sorted(omitted),
                   inventoryIsNotVulnerabilityScan=True,
-                  rendererSource='dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6',
-                  rendererBlob='cdaef0463cbb9a9aee161dbbea28e5b7436451af')
+                  rendererSource=reviewed_renderers.get(sdk),
+                  rendererBlob=('cdaef0463cbb9a9aee161dbbea28e5b7436451af'
+                                if sdk in reviewed_renderers else None))
     return result
 
 
