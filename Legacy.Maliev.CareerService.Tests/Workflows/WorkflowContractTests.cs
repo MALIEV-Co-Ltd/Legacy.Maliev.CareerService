@@ -46,13 +46,14 @@ public sealed class WorkflowContractTests
     /// <summary>Checks rejection of an unreviewed artifact-upload action pin.</summary>
     /// <param name="replacement">The unreviewed actions/upload-artifact reference substituted for the approved immutable action pin.</param>
     [Theory]
+    [InlineData("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a")]
     [InlineData("actions/upload-artifact@v7.0.1")]
     [InlineData("actions/upload-artifact@main # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a")]
     [InlineData("actions/upload-artifact@0000000000000000000000000000000000000000")]
     [InlineData("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02")]
     public void BuildAndTest_RejectsUnreviewedArtifactUploadPin(string replacement)
     {
-        AssertMutationRejected("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", replacement);
+        AssertMutationRejected("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", replacement);
     }
 
     /// <summary>Checks rejection of missing or disabled artifact ZIP archiving.</summary>
@@ -409,7 +410,7 @@ internal static partial class WorkflowContractValidator
 
         RequireScalarValue(evidence, "name", "Preserve validation evidence");
         RequireScalarValue(evidence, "if", "always()");
-        RequireScalarValue(evidence, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        RequireScalarValue(evidence, "uses", "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9");
         var evidenceInputs = RequireMapping(evidence, "with");
         if (evidenceInputs.Children.Count != 5)
         {
