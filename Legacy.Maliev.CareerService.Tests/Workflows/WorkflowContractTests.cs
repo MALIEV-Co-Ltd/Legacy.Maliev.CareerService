@@ -132,9 +132,25 @@ public sealed class WorkflowContractTests
         var reference = Assert.Single(project.Descendants("PackageReference"),
             element => (string?)element.Attribute("Include") == "Microsoft.EntityFrameworkCore.Design");
         Assert.Equal("'$(EnableCareerScaffoldDesignTime)' == 'true'", reference.Attribute("Condition")?.Value);
-        Assert.Equal("10.0.13", reference.Attribute("Version")?.Value);
+        Assert.Equal("10.0.14", reference.Attribute("Version")?.Value);
         Assert.Equal("all", reference.Element("PrivateAssets")?.Value);
         Assert.Contains("Microsoft.EntityFrameworkCore.Design", DataProject, StringComparison.Ordinal);
+    }
+
+    /// <summary>Checks the API's EF runtime references match the Data project dependency version.</summary>
+    [Fact]
+    public void EfRuntimeDependencies_AreCoordinatedWithData()
+    {
+        var api = XDocument.Parse(ApiProject);
+        var data = XDocument.Parse(DataProject);
+        var design = Assert.Single(data.Descendants("PackageReference"),
+            element => (string?)element.Attribute("Include") == "Microsoft.EntityFrameworkCore.Design");
+        foreach (var name in new[] { "Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Relational" })
+        {
+            var reference = Assert.Single(api.Descendants("PackageReference"),
+                element => (string?)element.Attribute("Include") == name);
+            Assert.Equal(design.Attribute("Version")?.Value, reference.Attribute("Version")?.Value);
+        }
     }
 
     /// <summary>Checks rejection of job-level permission escalation.</summary>
