@@ -250,6 +250,8 @@ internal static partial class WorkflowContractValidator
         python3 -B -c 'from pathlib import Path; [compile((Path("scripts")/name).read_bytes(), name, "exec") for name in ("career_required_ci_preflight.py", "test_career_required_ci_preflight.py")]'
         (cd scripts && timeout --signal=TERM --kill-after=5s 30s python3 -B -m unittest test_career_required_ci_preflight test_career_ci_candidate test_career_offer_detail_focus -v)
         python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-sdk-memory-preflight.json"
+        test ! -e "$RUNNER_TEMP/career-dotnet"
+        printf 'DOTNET_INSTALL_DIR=%s/career-dotnet\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
         """;
     private const string FocusCommand = """
         set -euo pipefail
