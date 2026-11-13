@@ -690,7 +690,7 @@ class CompletedAuditControls(unittest.TestCase):
                 with self.subTest(key=key,value=value):
                     report=copy.deepcopy(self.report);report[key]=value
                     with self.assertRaises(ValueError):self.run_report(report)
-        for version in (None,'','9.0.100','10.0.401','10.0.404','10.0.402 extra',
+        for version in (None,'','9.0.100','10.0.401','10.0.405','10.0.402 extra',
                         '10.0.403 extra','10.0.403-preview.1'):
             with self.assertRaises(ValueError):
                 candidate.audit_completed_report(json.dumps(self.report).encode(),json.dumps({'sdkVersion':version}).encode(),self.root)
@@ -700,11 +700,11 @@ class CompletedAuditControls(unittest.TestCase):
         for project in report['projects']:
             project['frameworks']=[{'framework':'net10.0'}]
         raw=json.dumps(report).encode()
-        sdk=json.dumps({'sdkVersion':'10.0.404'}).encode()
+        sdk=json.dumps({'sdkVersion':'10.0.405'}).encode()
         result=candidate.audit_completed_report(raw,sdk,self.root)
         self.assertEqual(result['vulnerabilities'],0)
         self.assertEqual(result['omittedCleanFrameworkProjects'],[])
-        self.assertEqual(result['sdkVersion'],'10.0.404')
+        self.assertEqual(result['sdkVersion'],'10.0.405')
         self.assertEqual(result['rawAuditSha256'],hashlib.sha256(raw).hexdigest())
         self.assertEqual(result['sdkIdentitySha256'],hashlib.sha256(sdk).hexdigest())
         self.assertIsNone(result['rendererSource'])
@@ -772,6 +772,10 @@ class CompletedAuditControls(unittest.TestCase):
 class CompletedAudit403Controls(CompletedAuditControls):
     SDK_VERSION='10.0.403'
     RENDERER_SOURCE='dotnet/dotnet@5a2162bea6845eabc1fc721624a43568c65db3b1'
+
+class CompletedAudit404Controls(CompletedAuditControls):
+    SDK_VERSION='10.0.404'
+    RENDERER_SOURCE='dotnet/dotnet@2ab2854867733112c84ac12c4273d7970ac3afdf'
 
 
 if __name__=='__main__':unittest.main()
