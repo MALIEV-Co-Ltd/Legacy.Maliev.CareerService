@@ -35,7 +35,8 @@ public sealed class WorkflowContractTests
             ("Total:[[:space:]]+5,", "Total:[[:space:]]+0,"),
             ("python3 -B scripts/career_offer_detail_focus.py", "python3 -B scripts/unreviewed_detail_focus.py"),
             ("timeout-minutes: 20", "timeout-minutes: 21"),
-            ("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68", "actions/setup-dotnet@main"),
+            ("actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73", "actions/setup-dotnet@main"),
+            ("actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73", "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68"),
             ("Build Release and run changed-behavior regressions before full suite", "Unreviewed focused regression"),
         })
         {
@@ -242,7 +243,7 @@ internal static partial class WorkflowContractValidator
     private const string CheckoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8";
 
-    private const string FocusSetupAction = "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68";
+    private const string FocusSetupAction = "actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73";
     private const string FocusStepName = "Build Release and run changed-behavior regressions before full suite";
     private const string MemoryAdmissionCommand = """
         set -euo pipefail
