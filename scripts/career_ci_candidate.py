@@ -206,10 +206,11 @@ def audit_no_vulnerabilities(raw):
 def audit_completed_report(raw, sdk_raw, root=ROOT):
     # NuGet's format1 renderer omits frameworks when no packages match
     # --vulnerable. Restored assets witness inventory, never vulnerability results.
-    # Both exact official SDK source tags contain the same reviewed renderer blob.
+    # Each exact official SDK source tag contains the same reviewed renderer blob.
     reviewed_renderers={
         '10.0.402':'dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6',
         '10.0.403':'dotnet/dotnet@5a2162bea6845eabc1fc721624a43568c65db3b1',
+        '10.0.404':'dotnet/dotnet@2ab2854867733112c84ac12c4273d7970ac3afdf',
     }
     audit=json.loads(raw)
     sdk_identity=json.loads(sdk_raw)
