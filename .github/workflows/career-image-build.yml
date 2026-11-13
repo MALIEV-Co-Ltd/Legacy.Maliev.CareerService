@@ -1,0 +1,106 @@
+name: Career API image build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Legacy.Maliev.CareerService.Api/Dockerfile'
+      - '.github/workflows/career-image-build.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Legacy.Maliev.CareerService.Api/Dockerfile'
+      - '.github/workflows/career-image-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  image-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check out pinned ServiceDefaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: c40a7f82cea347b949444dcd7fb730f2b8dc3c0e
+          path: .dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out pinned CompatibilityContracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: .dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Build exact Dockerfile without publishing
+        id: build
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git -C .dependencies/Legacy.Maliev.ServiceDefaults rev-parse HEAD)" = c40a7f82cea347b949444dcd7fb730f2b8dc3c0e
+          test "$(git -C .dependencies/Legacy.Maliev.CompatibilityContracts rev-parse HEAD)" = 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          printf 'Source head=%s tree=%s\n' "$EXPECTED_HEAD" "$(git rev-parse HEAD^{tree})"
+          tag="career-image-build:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$RUNNER_TEMP/career-image-id"
+          test ! -e "$RUNNER_TEMP/career-image-build-started"
+          docker info >/dev/null
+          tags="$(docker image ls --format '{{.Repository}}:{{.Tag}}')"
+          if grep -Fxq -- "$tag" <<< "$tags"; then
+            echo 'Unique run tag already exists; refusing to overwrite' >&2
+            exit 1
+          fi
+          : > "$RUNNER_TEMP/career-image-build-started"
+          DOCKER_BUILDKIT=1 docker build --progress=plain --iidfile "$RUNNER_TEMP/career-image-id" \
+            --tag "$tag" --file Legacy.Maliev.CareerService.Api/Dockerfile . 2>&1 | tee "$RUNNER_TEMP/career-image-build.log"
+          iid="$(cat "$RUNNER_TEMP/career-image-id")"
+          [[ "$iid" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(docker image inspect --format '{{.Id}}' "$tag")" = "$iid"
+          printf '%s\n' "$iid" > "$RUNNER_TEMP/career-image-settled"
+          for base in sdk:11.0 aspnet:10.0; do
+            matches="$(grep -E "^#[0-9]+ \[[^]]+\] FROM mcr[.]microsoft[.]com/dotnet/${base}@sha256:[0-9a-f]{64}" "$RUNNER_TEMP/career-image-build.log" | grep -Eo "mcr[.]microsoft[.]com/dotnet/${base}@sha256:[0-9a-f]{64}" | sort -u)"
+            [[ "$(printf '%s\n' "$matches" | wc -l)" -eq 1 && "$matches" =~ @sha256:[0-9a-f]{64}$ ]]
+            printf 'Resolved base: %s\n' "$matches"
+          done
+          if grep -E '(^|[[:space:]])warning (CS|NU|MSB|NETSDK)[0-9]+' "$RUNNER_TEMP/career-image-build.log"; then
+            echo 'Compiler or package warnings found' >&2
+            exit 1
+          fi
+          printf 'Built head=%s image=%s tag=%s\n' "$EXPECTED_HEAD" "$iid" "$tag"
+      - name: Remove exact owned image tag
+        if: always()
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="career-image-build:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if ! test -e "$RUNNER_TEMP/career-image-build-started"; then
+            echo 'Build was not invoked; no image is owned by this job.'
+            exit 0
+          fi
+          if ! test -s "$RUNNER_TEMP/career-image-settled"; then
+            echo 'Build settlement marker absent; daemon/image custody remains unverified' >&2
+            exit 1
+          fi
+          iid="$(cat "$RUNNER_TEMP/career-image-id")"
+          [[ "$iid" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(cat "$RUNNER_TEMP/career-image-settled")" = "$iid"
+          test "$(docker image inspect --format '{{.Id}}' "$tag")" = "$iid"
+          docker image rm "$tag"
+          docker info >/dev/null
+          tags="$(docker image ls --format '{{.Repository}}:{{.Tag}}')"
+          if grep -Fxq -- "$tag" <<< "$tags"; then
+            echo 'Owned image tag remains' >&2
+            exit 1
+          fi
+          printf 'Removed exact tag=%s for image=%s; runner/daemon destruction not asserted\n' "$tag" "$iid"
