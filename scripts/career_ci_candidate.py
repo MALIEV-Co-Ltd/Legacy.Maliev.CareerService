@@ -211,11 +211,12 @@ def audit_completed_report(raw, sdk_raw, root=ROOT):
         '10.0.402':'dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6',
         '10.0.403':'dotnet/dotnet@5a2162bea6845eabc1fc721624a43568c65db3b1',
         '10.0.404':'dotnet/dotnet@2ab2854867733112c84ac12c4273d7970ac3afdf',
+        '11.0.100':'dotnet/dotnet@297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f',
     }
     audit=json.loads(raw)
     sdk_identity=json.loads(sdk_raw)
     sdk=sdk_identity.get('sdkVersion') if isinstance(sdk_identity,dict) else None
-    if type(sdk) is not str or not re.fullmatch(r'10\.0\.[0-9]+',sdk):
+    if type(sdk) is not str or not (re.fullmatch(r'10\.0\.[0-9]+',sdk) or sdk == '11.0.100'):
         raise ValueError('Actual .NET10 SDK identity required')
     if (not isinstance(audit,dict) or type(audit.get('version')) is not int or
         audit['version']!=1 or audit.get('parameters')!='--vulnerable --include-transitive' or

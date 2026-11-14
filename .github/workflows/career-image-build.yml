@@ -6,11 +6,15 @@ on:
     paths:
       - 'Legacy.Maliev.CareerService.Api/Dockerfile'
       - '.github/workflows/career-image-build.yml'
+      - 'scripts/career-image-deadline-public.py'
+      - 'scripts/test-career-image-deadline-public.py'
   push:
     branches: [main]
     paths:
       - 'Legacy.Maliev.CareerService.Api/Dockerfile'
       - '.github/workflows/career-image-build.yml'
+      - 'scripts/career-image-deadline-public.py'
+      - 'scripts/test-career-image-deadline-public.py'
 
 permissions:
   contents: read
@@ -18,7 +22,7 @@ permissions:
 jobs:
   image-build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -53,6 +57,11 @@ jobs:
           sentinel="$RUNNER_TEMP/career77-receipts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -- "$sentinel"
           printf 'admitted=true\n' >> "$GITHUB_OUTPUT"
+      - name: Verify deadline admission controls
+        run: python3 -B scripts/test-career-image-deadline-public.py
+      - name: Admit build time with cleanup reserve
+        timeout-minutes: 1
+        run: python3 -B scripts/career-image-deadline-public.py build
       - name: Build exact Dockerfile without publishing
         id: build
         timeout-minutes: 30
@@ -84,7 +93,7 @@ jobs:
           [[ "$iid" =~ ^sha256:[0-9a-f]{64}$ ]]
           test "$(docker image inspect --format '{{.Id}}' "$tag")" = "$iid"
           printf '%s\n' "$iid" > "$RUNNER_TEMP/career-image-settled"
-          for base in sdk:11.0 aspnet:10.0; do
+          for base in sdk:11.0 aspnet:11.0; do
             matches="$(grep -E "^#[0-9]+ \[[^]]+\] FROM mcr[.]microsoft[.]com/dotnet/${base}@sha256:[0-9a-f]{64}" "$RUNNER_TEMP/career-image-build.log" | grep -Eo "mcr[.]microsoft[.]com/dotnet/${base}@sha256:[0-9a-f]{64}" | sort -u)"
             [[ "$(printf '%s\n' "$matches" | wc -l)" -eq 1 && "$matches" =~ @sha256:[0-9a-f]{64}$ ]]
             printf 'Resolved base: %s\n' "$matches"
@@ -94,6 +103,9 @@ jobs:
             exit 1
           fi
           printf 'Built head=%s image=%s tag=%s\n' "$EXPECTED_HEAD" "$iid" "$tag"
+      - name: Admit startup time with cleanup reserve
+        timeout-minutes: 1
+        run: python3 -B scripts/career-image-deadline-public.py startup
       - name: Verify isolated application liveness
         timeout-minutes: 3
         shell: bash
@@ -148,6 +160,7 @@ jobs:
                 and h.get('Tmpfs') == {'/tmp': 'rw,noexec,nosuid,nodev,size=16m,mode=1777'}
                 and (c['Config']['User'] or '').split(':', 1)[0] not in ('', '0', 'root')
                 and c['Config']['Entrypoint'] == ['dotnet', 'Legacy.Maliev.CareerService.Api.dll']
+                and env.get('DOTNET_ROLL_FORWARD') == 'Major'
                 and all(env.get(key) == value for key, value in expected_env.items())
                 and all(m.get('Type') == 'tmpfs' and m.get('Destination') == '/tmp' for m in c['Mounts']))
           if not ok: raise SystemExit('container ownership or isolation mismatch')
@@ -184,6 +197,8 @@ jobs:
                 [[ "$byte" =~ ^(09|0a|0d|[2-6][0-9a-f]|7[0-9a-e])$ ]] || exit 1
               done
               [[ "$body" == 4865616c746879 ]] || exit 1
+              grep -Eq '/shared/Microsoft[.]NETCore[.]App/11[.][0-9]+[.][0-9]+/libcoreclr[.]so' /proc/1/maps || exit 1
+              grep -Eq '/shared/Microsoft[.]AspNetCore[.]App/11[.][0-9]+[.][0-9]+/Microsoft[.]AspNetCore[.][^ ]+[.]dll' /proc/1/maps || exit 1
               exit 0
             fi
             sleep 0.5
@@ -270,6 +285,7 @@ jobs:
           printf 'Removed exact tag=%s for image=%s; runner/daemon destruction not asserted\n' "$tag" "$iid"
       - name: Retain bounded startup custody
         if: always() && steps.receipt_preflight.outputs.admitted == 'true'
+        timeout-minutes: 2
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: career-image-startup-${{ github.run_id }}-${{ github.run_attempt }}

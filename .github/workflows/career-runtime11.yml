@@ -1,0 +1,155 @@
+name: Career runtime11 compatibility
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DOTNET_ROLL_FORWARD: LatestMajor
+      CAREER_REQUIRED_RUNTIME_MAJOR: '11'
+      MalievWorkspaceRoot: ${{ github.workspace }}/.dependencies
+      VSTestCollect: XPlat Code Coverage
+      VSTestLogger: trx
+      VSTestResultsDirectory: ${{ github.workspace }}/runner-results
+      MALIEV_TEST_RESOURCE_OWNER: career-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out CareerService
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check out Legacy.Maliev.ServiceDefaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: c40a7f82cea347b949444dcd7fb730f2b8dc3c0e
+          path: .dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out Legacy.Maliev.CompatibilityContracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: .dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Check fresh physical memory before SDK setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B -c 'from pathlib import Path; [compile((Path("scripts")/name).read_bytes(), name, "exec") for name in ("career_required_ci_preflight.py", "test_career_required_ci_preflight.py")]'
+          (cd scripts && timeout --signal=TERM --kill-after=5s 30s python3 -B -m unittest test_career_required_ci_preflight test_career_ci_candidate test_career_offer_detail_focus -v)
+          python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-sdk-memory-preflight.json"
+      - name: Check out exact pinned validation source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.Workflows
+          ref: e3a6093324a24968876782153286f52db8b29fd8
+          path: .dependencies/Legacy.Maliev.Workflows
+          persist-credentials: false
+      - name: Admit preinstalled hosted SDK11 and bounded validation
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git -C .dependencies/Legacy.Maliev.Workflows rev-parse HEAD)" = e3a6093324a24968876782153286f52db8b29fd8
+          printf '%s  %s\n' 2b0a4e2ff4de724c5ae1aafed3b405701f425e42e1fe53fa0ef5014b8be4c8a0 .dependencies/Legacy.Maliev.Workflows/actions/dotnet-validate/action.yml | sha256sum -c -
+          printf '%s  %s\n' 9b19ddf333371cf746200aff5443337c07c0d794ddeda77bd5b18dae12ea5ab7 .github/actions/career-runtime11-validate/action.yml | sha256sum -c -
+          test -x /usr/share/dotnet/dotnet
+          /usr/share/dotnet/dotnet --list-sdks | grep -Eq '^11[.]0[.]100 '
+          test "$(/usr/share/dotnet/dotnet --version)" = '11.0.100'
+          /usr/share/dotnet/dotnet --list-runtimes > "$RUNNER_TEMP/career78-runtimes.txt"
+          grep -Eq '^Microsoft[.]NETCore[.]App 11[.]' "$RUNNER_TEMP/career78-runtimes.txt"
+          grep -Eq '^Microsoft[.]AspNetCore[.]App 11[.]' "$RUNNER_TEMP/career78-runtimes.txt"
+          if grep -Eq '^Microsoft[.](NETCore|AspNetCore)[.]App (1[2-9]|[2-9][0-9])[.]' "$RUNNER_TEMP/career78-runtimes.txt"; then exit 1; fi
+          python3 -B scripts/test-career-runtime-deadline.py
+          python3 -B scripts/career-runtime-deadline.py validate
+          echo 'DOTNET_ROOT=/usr/share/dotnet' >> "$GITHUB_ENV"
+          echo /usr/share/dotnet >> "$GITHUB_PATH"
+      - name: Build Release and run changed-behavior regressions before full suite
+        shell: bash
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          export GITHUB_ACTIONS=false
+          mkdir -p runner-results/focus24
+          python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-restore-memory.json"
+          test "$(dotnet --version)" = '11.0.100'
+          timeout --signal=TERM --kill-after=5s 300s dotnet restore Legacy.Maliev.CareerService.slnx 2>&1 | tee runner-results/focus24/restore.log
+          python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-build-memory.json"
+          timeout --signal=TERM --kill-after=5s 300s dotnet build Legacy.Maliev.CareerService.slnx --configuration Release --no-restore --warnaserror 2>&1 | tee runner-results/focus24/build.log
+          grep -Eq '^[[:space:]]*0 Warning\(s\)[[:space:]]*$' runner-results/focus24/build.log
+          grep -Eq '^[[:space:]]*0 Error\(s\)[[:space:]]*$' runner-results/focus24/build.log
+          python3 -B scripts/career_required_ci_preflight.py | tee runner-results/focus24/memory.json
+          VSTestCollect='' timeout --signal=TERM --kill-after=5s 300s dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~Update_ChangesExistingLevelAndRefreshesPublicProjectionWithoutChangingEitherPrincipalOrSurvivor|FullyQualifiedName~SelectedOfferDeletion_PreservesSharedLevelsAndSurvivorsAndRecomputesGlobalOpenStatus|FullyQualifiedName~LevelGraph_|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerFixtureLifetimeTests' --logger 'trx;LogFileName=career-focus24.trx' --results-directory runner-results/focus24 2>&1 | tee runner-results/focus24/test.log
+          grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+26, Skipped:[[:space:]]+0, Total:[[:space:]]+26,' runner-results/focus24/test.log
+          python3 -B scripts/career_direct_source_focus.py retained runner-results/focus24 | tee runner-results/focus24/identity-gate.json
+          mkdir -p runner-results/original-boundary
+          python3 -B scripts/career_required_ci_preflight.py | tee runner-results/original-boundary/memory.json
+          VSTestCollect='' timeout --signal=TERM --kill-after=5s 300s dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalBoundaryRetentionHttpTests' --logger 'trx;LogFileName=career-original-boundary.trx' --results-directory runner-results/original-boundary 2>&1 | tee runner-results/original-boundary/test.log
+          grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+6, Skipped:[[:space:]]+0, Total:[[:space:]]+6,' runner-results/original-boundary/test.log
+          python3 -B scripts/career_direct_source_focus.py boundary runner-results/original-boundary | tee runner-results/original-boundary/identity-gate.json
+          mkdir -p runner-results/pagination-wire
+          python3 -B scripts/career_required_ci_preflight.py | tee runner-results/pagination-wire/memory.json
+          VSTestCollect='' timeout --signal=TERM --kill-after=5s 300s dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOriginalPaginationWireHttpTests|FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerRouteFixtureNativeResourceTests' --logger 'trx;LogFileName=career-pagination-wire.trx' --results-directory runner-results/pagination-wire 2>&1 | tee runner-results/pagination-wire/test.log
+          grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+4, Skipped:[[:space:]]+0, Total:[[:space:]]+4,' runner-results/pagination-wire/test.log
+          python3 -B scripts/career_direct_source_focus.py wire runner-results/pagination-wire | tee runner-results/pagination-wire/identity-gate.json
+          mkdir -p runner-results/offer-detail
+          python3 -B scripts/career_required_ci_preflight.py | tee runner-results/offer-detail/memory.json
+          VSTestCollect='' timeout --signal=TERM --kill-after=5s 300s dotnet test Legacy.Maliev.CareerService.Tests/Legacy.Maliev.CareerService.Tests.csproj --configuration Release --no-build --no-restore --filter 'FullyQualifiedName~Legacy.Maliev.CareerService.Tests.Controllers.CareerOfferDetailSourceHttpTests' --logger 'trx;LogFileName=career-offer-detail.trx' --results-directory runner-results/offer-detail 2>&1 | tee runner-results/offer-detail/test.log
+          grep -Eq 'Failed:[[:space:]]+0, Passed:[[:space:]]+5, Skipped:[[:space:]]+0, Total:[[:space:]]+5,' runner-results/offer-detail/test.log
+          python3 -B scripts/career_offer_detail_focus.py runner-results/offer-detail | tee runner-results/offer-detail/identity-gate.json
+      - name: Check fresh memory before shared validation
+        timeout-minutes: 1
+        shell: bash
+        run: python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-shared-memory.json"
+      - name: Validate .NET solution
+        timeout-minutes: 10
+        uses: ./.github/actions/career-runtime11-validate
+        with:
+          solution: Legacy.Maliev.CareerService.slnx
+          use-local-maliev-dependencies: 'true'
+      - name: Verify complete JSON package audit
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          export GITHUB_ACTIONS=false
+          python3 -B scripts/career_required_ci_preflight.py | tee "$RUNNER_TEMP/career-audit-memory.json"
+          test "$(dotnet --version)" = '11.0.100'
+          timeout --signal=TERM --kill-after=5s 10s dotnet --version | python3 -c 'import json,sys; json.dump({"sdkVersion":sys.stdin.read().strip()},sys.stdout)' > "$RUNNER_TEMP/career-candidate-package-audit-sdk.json"
+          timeout --signal=TERM --kill-after=5s 120s dotnet list Legacy.Maliev.CareerService.slnx package --vulnerable --include-transitive --no-restore --format json > "$RUNNER_TEMP/career-candidate-package-audit.json"
+          python3 -B scripts/career_ci_candidate.py audit "$RUNNER_TEMP/career-candidate-package-audit.json" | tee "$RUNNER_TEMP/career-candidate-package-audit-gate.json"
+      - name: Validate safe scaffold orchestration
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./tooling/Test-CareerScaffoldContract.ps1 -EvidencePath ./runner-results/career-scaffold-orchestration.json
+      - name: Gate owned production coverage
+        timeout-minutes: 3
+        run: python3 scripts/verify-runner-coverage.py runner-results
+      - name: Preserve validation evidence
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: career-runtime11-${{ github.sha }}
+          path: |
+            runner-results
+            ${{ runner.temp }}/career78-runtimes.txt
+            ${{ runner.temp }}/career-sdk-memory-preflight.json
+            ${{ runner.temp }}/career-*-memory.json
+            ${{ runner.temp }}/career-candidate-package-audit*.json
+          if-no-files-found: warn
+          retention-days: 7
+          archive: true
