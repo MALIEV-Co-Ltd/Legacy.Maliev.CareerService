@@ -40,7 +40,7 @@ public sealed class StartupFailureAcceptanceTests(ITestOutputHelper output)
             while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "Legacy.Maliev.CareerService.slnx")))
                 repository = repository.Parent;
             Assert.NotNull(repository);
-            var api = Path.Combine(repository.FullName, "Legacy.Maliev.CareerService.Api", "bin", "Release", "net10.0",
+            var api = Path.Combine(repository.FullName, "Legacy.Maliev.CareerService.Api", "bin", "Release", "net11.0",
                 "Legacy.Maliev.CareerService.Api.dll");
             Assert.True(File.Exists(api) && File.Exists(Path.ChangeExtension(api, ".runtimeconfig.json")),
                 "Build the actual API Release artifacts before running subprocess acceptance.");

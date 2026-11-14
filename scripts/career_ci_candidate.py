@@ -181,8 +181,8 @@ def audit_no_vulnerabilities(raw):
             raise ValueError('Vulnerability audit framework data unavailable')
         for framework in project['frameworks']:
             if (not isinstance(framework,dict) or
-                type(framework.get('framework')) is not str or framework['framework']!='net10.0'):
-                raise ValueError('Exact actual net10.0 audit framework identity required')
+                type(framework.get('framework')) is not str or framework['framework']!='net11.0'):
+                raise ValueError('Exact actual net11.0 audit framework identity required')
             for key in ('topLevelPackages','transitivePackages'):
                 packages=framework.get(key,[])
                 if not isinstance(packages,list) or any(not isinstance(p,dict) for p in packages):
@@ -208,16 +208,13 @@ def audit_completed_report(raw, sdk_raw, root=ROOT):
     # --vulnerable. Restored assets witness inventory, never vulnerability results.
     # Each exact official SDK source tag contains the same reviewed renderer blob.
     reviewed_renderers={
-        '10.0.402':'dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6',
-        '10.0.403':'dotnet/dotnet@5a2162bea6845eabc1fc721624a43568c65db3b1',
-        '10.0.404':'dotnet/dotnet@2ab2854867733112c84ac12c4273d7970ac3afdf',
         '11.0.100':'dotnet/dotnet@297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f',
     }
     audit=json.loads(raw)
     sdk_identity=json.loads(sdk_raw)
     sdk=sdk_identity.get('sdkVersion') if isinstance(sdk_identity,dict) else None
-    if type(sdk) is not str or not (re.fullmatch(r'10\.0\.[0-9]+',sdk) or sdk == '11.0.100'):
-        raise ValueError('Actual .NET10 SDK identity required')
+    if sdk != '11.0.100':
+        raise ValueError('Exact reviewed .NET 11 SDK identity required')
     if (not isinstance(audit,dict) or type(audit.get('version')) is not int or
         audit['version']!=1 or audit.get('parameters')!='--vulnerable --include-transitive' or
         audit.get('sources')!=['https://api.nuget.org/v3/index.json'] or
@@ -249,22 +246,22 @@ def audit_completed_report(raw, sdk_raw, root=ROOT):
         if not isinstance(restored,dict) or not isinstance(restored.get('restore'),dict):
             raise ValueError('Restored framework inventory unavailable')
         restore=restored['restore']
-        if (not isinstance(assets.get('targets'),dict) or set(assets['targets'])!={'net10.0'} or
-            not isinstance(restored.get('frameworks'),dict) or set(restored['frameworks'])!={'net10.0'} or
-            not isinstance(assets['targets']['net10.0'],dict) or not isinstance(restored['frameworks']['net10.0'],dict) or
-            restore.get('projectName')!=name or restore.get('originalTargetFrameworks')!=['net10.0'] or
+        if (not isinstance(assets.get('targets'),dict) or set(assets['targets'])!={'net11.0'} or
+            not isinstance(restored.get('frameworks'),dict) or set(restored['frameworks'])!={'net11.0'} or
+            not isinstance(assets['targets']['net11.0'],dict) or not isinstance(restored['frameworks']['net11.0'],dict) or
+            restore.get('projectName')!=name or restore.get('originalTargetFrameworks')!=['net11.0'] or
             type(restore.get('projectPath')) is not str or Path(restore['projectPath']).resolve(strict=True)!=project_path):
-            raise ValueError('Exact restored net10.0 project inventory required')
+            raise ValueError('Exact restored net11.0 project inventory required')
         assets_hashes[name]=digest(assets_raw);project_hashes[name]=digest(project_path.read_bytes())
         if 'frameworks' not in project:
             if sdk not in reviewed_renderers:
-                raise ValueError('Omitted frameworks require a reviewed exact .NET10 SDK renderer')
+                raise ValueError('Omitted frameworks require a reviewed exact SDK renderer')
             # Only the verified renderer omission is interpreted. Explicit null,
             # empty, malformed or wrong framework data still reaches strict refusal.
-            project['frameworks']=[{'framework':'net10.0'}]
+            project['frameworks']=[{'framework':'net11.0'}]
             omitted.append(name)
         elif not isinstance(project['frameworks'],list) or len(project['frameworks'])!=1:
-            raise ValueError('Exact actual net10.0 audit framework identity required')
+            raise ValueError('Exact actual net11.0 audit framework identity required')
     result=audit_no_vulnerabilities(json.dumps(audit))
     result.update(rawAuditSha256=digest(raw),sdkVersion=sdk,sdkIdentitySha256=digest(sdk_raw),
                   restoredAssetsSha256=assets_hashes,projectSha256=project_hashes,

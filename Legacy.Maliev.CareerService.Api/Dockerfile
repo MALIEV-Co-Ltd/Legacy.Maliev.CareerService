@@ -3,6 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 ENV GITHUB_ACTIONS=false
 COPY nuget.config .
+COPY Directory.Build.props .
 COPY .dependencies/ .dependencies/
 COPY Legacy.Maliev.CareerService.Api/Legacy.Maliev.CareerService.Api.csproj Legacy.Maliev.CareerService.Api/
 COPY Legacy.Maliev.CareerService.Application/Legacy.Maliev.CareerService.Application.csproj Legacy.Maliev.CareerService.Application/
