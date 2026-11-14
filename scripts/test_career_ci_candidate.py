@@ -127,7 +127,7 @@ class CandidateControls(unittest.TestCase):
 
     def audit(self):
         return {'projects':[{'path':'/checkout/Legacy.Maliev.CareerService.'+name+'.csproj',
-                             'frameworks':[{'framework':'net10.0'}]}
+                             'frameworks':[{'framework':'net11.0'}]}
                             for name in ('Domain','Application','Api','Data','Tests')]}
 
     def test_existing_json_audit_contract_accepts_all_five_clean_projects(self):
@@ -626,8 +626,8 @@ class CandidateControls(unittest.TestCase):
         self.refused_without_write(policy=policy)
 
 class CompletedAuditControls(unittest.TestCase):
-    SDK_VERSION='10.0.402'
-    RENDERER_SOURCE='dotnet/dotnet@3073618cc1ab03586872e1cf3035afd377d66df6'
+    SDK_VERSION='11.0.100'
+    RENDERER_SOURCE='dotnet/dotnet@297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f'
 
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
@@ -641,9 +641,9 @@ class CompletedAuditControls(unittest.TestCase):
             project=self.root/name/(name+'.csproj');project.parent.mkdir()
             project.write_text('<Project Sdk="Microsoft.NET.Sdk"/>')
             asset=project.parent/'obj/project.assets.json';asset.parent.mkdir()
-            data={'version':4,'targets':{'net10.0':{}},'project':{
-                'frameworks':{'net10.0':{}},'restore':{'projectPath':str(project),
-                'projectName':name,'originalTargetFrameworks':['net10.0']}}}
+            data={'version':4,'targets':{'net11.0':{}},'project':{
+                'frameworks':{'net11.0':{}},'restore':{'projectPath':str(project),
+                'projectName':name,'originalTargetFrameworks':['net11.0']}}}
             asset.write_text(json.dumps(data));self.assets.append(asset)
             self.report['projects'].append({'path':str(project)})
 
@@ -672,7 +672,7 @@ class CompletedAuditControls(unittest.TestCase):
         self.assertTrue(result['inventoryIsNotVulnerabilityScan'])
 
     def test_mixed_explicit_and_omitted_clean_frameworks_preserve_evidence(self):
-        self.report['projects'][0]['frameworks']=[{'framework':'net10.0'}]
+        self.report['projects'][0]['frameworks']=[{'framework':'net11.0'}]
         raw=json.dumps(self.report).encode()
         result=self.run_report()
         self.assertEqual(len(result['omittedCleanFrameworkProjects']),4)
@@ -695,22 +695,13 @@ class CompletedAuditControls(unittest.TestCase):
             with self.assertRaises(ValueError):
                 candidate.audit_completed_report(json.dumps(self.report).encode(),json.dumps({'sdkVersion':version}).encode(),self.root)
 
-    def test_unreviewed_sdk_with_complete_explicit_frameworks_has_no_renderer_attribution(self):
+    def test_sdk10_is_refused_even_with_explicit_net11_frameworks(self):
         report=copy.deepcopy(self.report)
         for project in report['projects']:
-            project['frameworks']=[{'framework':'net10.0'}]
-        raw=json.dumps(report).encode()
-        sdk=json.dumps({'sdkVersion':'10.0.405'}).encode()
-        result=candidate.audit_completed_report(raw,sdk,self.root)
-        self.assertEqual(result['vulnerabilities'],0)
-        self.assertEqual(result['omittedCleanFrameworkProjects'],[])
-        self.assertEqual(result['sdkVersion'],'10.0.405')
-        self.assertEqual(result['rawAuditSha256'],hashlib.sha256(raw).hexdigest())
-        self.assertEqual(result['sdkIdentitySha256'],hashlib.sha256(sdk).hexdigest())
-        self.assertIsNone(result['rendererSource'])
-        self.assertIsNone(result['rendererBlob'])
-        self.assertEqual(len(result['restoredAssetsSha256']),5)
-        self.assertEqual(len(result['projectSha256']),5)
+            project['frameworks']=[{'framework':'net11.0'}]
+        for version in ('10.0.402','10.0.403','10.0.404','10.0.405'):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                candidate.audit_completed_report(json.dumps(report).encode(),json.dumps({'sdkVersion':version}).encode(),self.root)
 
     def test_missing_duplicate_foreign_or_unbound_project_refused(self):
         for mutation in ('missing','duplicate','foreign','unbound'):
@@ -724,7 +715,7 @@ class CompletedAuditControls(unittest.TestCase):
 
     def test_explicit_invalid_frameworks_never_use_inventory_substitution(self):
         for frameworks in (None,[],{},[{}],[{'framework':'net9.0'}],
-                           [{'framework':'net10.0'},{'framework':'net10.0'}]):
+                           [{'framework':'net11.0'},{'framework':'net11.0'}]):
             report=copy.deepcopy(self.report);report['projects'][0]['frameworks']=frameworks
             with self.subTest(frameworks=frameworks),self.assertRaises(ValueError):self.run_report(report)
 
@@ -755,7 +746,7 @@ class CompletedAuditControls(unittest.TestCase):
         for key in ('topLevelPackages','transitivePackages'):
             for value in ([{'severity':'Low','advisoryurl':'https://example.invalid/advisory'}],None,{},[{}]):
                 report=copy.deepcopy(self.report)
-                report['projects'][0]['frameworks']=[{'framework':'net10.0',key:[{'id':'Affected','vulnerabilities':value}]}]
+                report['projects'][0]['frameworks']=[{'framework':'net11.0',key:[{'id':'Affected','vulnerabilities':value}]}]
                 with self.subTest(key=key,value=value),self.assertRaises(ValueError):self.run_report(report)
 
     def test_active_cli_binds_sdk_identity_and_preserves_raw_audit(self):
@@ -769,23 +760,10 @@ class CompletedAuditControls(unittest.TestCase):
         with patch('sys.argv',['career_ci_candidate.py','audit','one','external-assets']),self.assertRaisesRegex(ValueError,'Closed'):
             candidate.main()
 
-class CompletedAudit403Controls(CompletedAuditControls):
-    SDK_VERSION='10.0.403'
-    RENDERER_SOURCE='dotnet/dotnet@5a2162bea6845eabc1fc721624a43568c65db3b1'
-
-class CompletedAudit404Controls(CompletedAuditControls):
-    SDK_VERSION='10.0.404'
-    RENDERER_SOURCE='dotnet/dotnet@2ab2854867733112c84ac12c4273d7970ac3afdf'
-
-
-class CompletedAudit110100Controls(CompletedAuditControls):
-    SDK_VERSION='11.0.100'
-    RENDERER_SOURCE='dotnet/dotnet@297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f'
-
     def test_other_sdk11_versions_are_refused_even_with_explicit_frameworks(self):
         report=copy.deepcopy(self.report)
         for project in report['projects']:
-            project['frameworks']=[{'framework':'net10.0'}]
+            project['frameworks']=[{'framework':'net11.0'}]
         for version in ('11.0.101','11.0.100-preview.1','11.0.100 extra'):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 candidate.audit_completed_report(json.dumps(report).encode(),json.dumps({'sdkVersion':version}).encode(),self.root)

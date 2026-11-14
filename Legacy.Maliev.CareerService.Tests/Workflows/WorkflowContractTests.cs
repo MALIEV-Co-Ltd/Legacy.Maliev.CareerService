@@ -94,8 +94,8 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsCommentedDependencySha()
     {
         AssertMutationRejected(
-            "ref: c40a7f82cea347b949444dcd7fb730f2b8dc3c0e",
-            "ref: main # c40a7f82cea347b949444dcd7fb730f2b8dc3c0e");
+            "ref: 173d63218d9142b34075bca87f5c6d933bcbdfb6",
+            "ref: main # 173d63218d9142b34075bca87f5c6d933bcbdfb6");
     }
 
     /// <summary>Checks that the API references only the legacy ServiceDefaults project.</summary>
@@ -117,8 +117,8 @@ public sealed class WorkflowContractTests
         Assert.Contains("AddStandardMiddleware(", program, StringComparison.Ordinal);
         Assert.Contains("UseStandardMiddleware()", program, StringComparison.Ordinal);
         Assert.DoesNotContain("UseExceptionHandler(", program, StringComparison.Ordinal);
-        Assert.Contains("ref: c40a7f82cea347b949444dcd7fb730f2b8dc3c0e", Workflow, StringComparison.Ordinal);
-        Assert.Contains("legacy-service-defaults-ref: c40a7f82cea347b949444dcd7fb730f2b8dc3c0e", publisher,
+        Assert.Contains("ref: 173d63218d9142b34075bca87f5c6d933bcbdfb6", Workflow, StringComparison.Ordinal);
+        Assert.Contains("legacy-service-defaults-ref: 173d63218d9142b34075bca87f5c6d933bcbdfb6", publisher,
             StringComparison.Ordinal);
     }
 
@@ -133,7 +133,7 @@ public sealed class WorkflowContractTests
         var reference = Assert.Single(project.Descendants("PackageReference"),
             element => (string?)element.Attribute("Include") == "Microsoft.EntityFrameworkCore.Design");
         Assert.Equal("'$(EnableCareerScaffoldDesignTime)' == 'true'", reference.Attribute("Condition")?.Value);
-        Assert.Equal("10.0.14", reference.Attribute("Version")?.Value);
+        Assert.Equal("10.0.15", reference.Attribute("Version")?.Value);
         Assert.Equal("all", reference.Element("PrivateAssets")?.Value);
         Assert.Contains("Microsoft.EntityFrameworkCore.Design", DataProject, StringComparison.Ordinal);
     }
@@ -363,7 +363,7 @@ internal static partial class WorkflowContractValidator
         {
             throw new InvalidOperationException("Focused SDK setup must contain only dotnet-version.");
         }
-        RequireScalarValue(setupInputs, "dotnet-version", "10.0.x");
+        RequireScalarValue(setupInputs, "dotnet-version", "11.0.100");
         var focus = RequireMapping(steps.Children[5], "build-first focused regression");
         var focusKeys = focus.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal);
         if (!focusKeys.SetEquals(["name", "shell", "timeout-minutes", "run"]))
@@ -455,7 +455,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults",
-                ["ref"] = "c40a7f82cea347b949444dcd7fb730f2b8dc3c0e",
+                ["ref"] = "173d63218d9142b34075bca87f5c6d933bcbdfb6",
                 ["path"] = ".dependencies/Legacy.Maliev.ServiceDefaults",
                 ["persist-credentials"] = "false",
             });
@@ -465,7 +465,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts",
-                ["ref"] = "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7",
+                ["ref"] = "fe17b8cea8ace3eef5434f8b29c9038f5c975613",
                 ["path"] = ".dependencies/Legacy.Maliev.CompatibilityContracts",
                 ["persist-credentials"] = "false",
             });
@@ -475,6 +475,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["solution"] = "Legacy.Maliev.CareerService.slnx",
+                ["dotnet-version"] = "11.0.100",
                 ["use-local-maliev-dependencies"] = "true",
             });
     }
