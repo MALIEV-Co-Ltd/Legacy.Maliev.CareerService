@@ -778,4 +778,16 @@ class CompletedAudit404Controls(CompletedAuditControls):
     RENDERER_SOURCE='dotnet/dotnet@2ab2854867733112c84ac12c4273d7970ac3afdf'
 
 
+class CompletedAudit110100Controls(CompletedAuditControls):
+    SDK_VERSION='11.0.100'
+    RENDERER_SOURCE='dotnet/dotnet@297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f'
+
+    def test_other_sdk11_versions_are_refused_even_with_explicit_frameworks(self):
+        report=copy.deepcopy(self.report)
+        for project in report['projects']:
+            project['frameworks']=[{'framework':'net10.0'}]
+        for version in ('11.0.101','11.0.100-preview.1','11.0.100 extra'):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                candidate.audit_completed_report(json.dumps(report).encode(),json.dumps({'sdkVersion':version}).encode(),self.root)
+
 if __name__=='__main__':unittest.main()
