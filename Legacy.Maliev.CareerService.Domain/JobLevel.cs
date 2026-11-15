@@ -19,5 +19,5 @@ public sealed class JobLevel
     public DateTime? ModifiedDate { get; set; }
 
     /// <summary>Gets or sets the offers attached to the level.</summary>
-    public ICollection<JobOffer>? Offers { get; set; }
+    public ICollection<JobOffer>? Offers { get; set; } = new HashSet<JobOffer>();
 }
